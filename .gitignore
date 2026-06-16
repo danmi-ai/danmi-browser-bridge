@@ -1,0 +1,67 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# SQLite
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Node / Extension
+node_modules/
+extension/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Ralph progress (auto-generated)
+ralph/*/progress.txt
+
+# Runtime logs / pid
+logs/
+
+# Runtime data — never commit
+data/
+data-dev/
+logs/
+*.log
+*.pid
+*.token
+
+# Skill onboarding output (per-user delivery dirs)
+bb-onboard-*/
+run*/onboard/
+run*/onboard-dev/
+drive-out/
+
+# Built extension zip — 构建产物，不入库。分发源是你的静态托管（对象存储/CDN）；
+# server 的 /static/ 只是本地 fallback，需要时本地重建即可。
+web/danmi-browser-bridge-extension.zip
+
+# Ruff cache
+.ruff_cache/
+
+# === Internal overlay — 内部专属，公共仓不入库 ===
+# 内部部署细节（BOS 发布、服务发现锚点、反馈库、竞品调研、部署 skill）。
+# 内部机器上把它作为嵌套独立私有 git 仓维护。
+internal/
+
+# 扩展真实端点配置（由 internal 注入；公共仓只提供 config.example.js）
+extension/src/config.js
+
+# 本地服务配置（可能含部署相关路径）；公共仓不强依赖
+# config.toml  # 当前无敏感信息，保持入库；如需本地化覆盖再放开此行
+

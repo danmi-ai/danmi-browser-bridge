@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>丹秘 Browser Bridge — 管理后台</title>
+<style>
+:root {
+  --bg: #ffffff;
+  --bg-card: #F7F8FA;
+  --border: #E8E8E8;
+  --border-light: #F2F3F5;
+  --text-1: #181E25;
+  --text-2: #4E5969;
+  --text-3: #86909C;
+  --text-4: #C9CDD4;
+  --accent: #4E6EF2;
+  --accent-hover: #3D5CE0;
+  --accent-bg: rgba(78, 110, 242, 0.06);
+  --success: #00B42A;
+  --success-bg: rgba(0, 180, 42, 0.08);
+  --warning: #FF7D00;
+  --warning-bg: rgba(255, 125, 0, 0.06);
+  --danger: #F53F3F;
+  --danger-bg: rgba(245, 63, 63, 0.06);
+  --radius: 10px;
+  --radius-pill: 20px;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --mono: "SF Mono", "JetBrains Mono", monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", system-ui, sans-serif;
+}
+html.dark, html.dark * {
+  --bg: #1A1D23;
+  --bg-card: #242830;
+  --border: #363B44;
+  --border-light: #2C3038;
+  --text-1: #F0F1F3;
+  --text-2: #B8BCC4;
+  --text-3: #7A8090;
+  --text-4: #4A5060;
+  --accent: #6B8AFF;
+  --accent-hover: #5A78F0;
+  --accent-bg: rgba(107, 138, 255, 0.1);
+  --success: #34D058;
+  --success-bg: rgba(52, 208, 88, 0.1);
+  --warning: #FFB020;
+  --warning-bg: rgba(255, 176, 32, 0.08);
+  --danger: #FF6B6B;
+  --danger-bg: rgba(255, 107, 107, 0.08);
+}
+* { box-sizing: border-box; margin: 0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text-1); padding: 24px; line-height: 1.5; font-size: 13px; }
+.container { max-width: 1200px; margin: 0 auto; }
+h1 { font-size: 16px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; color: var(--text-1); }
+h1 img { width: 20px; height: 20px; border-radius: 5px; }
+.tab { padding: 8px 16px; border: none; background: none; cursor: pointer; color: var(--text-3); border-bottom: 2px solid transparent; font-size: 13px; font-weight: 500; transition: all 0.15s var(--ease); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); font-weight: 600; }
+.tab:hover { color: var(--text-1); }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-bottom: 20px; }
+.card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: var(--radius); padding: 12px 14px; animation: cardIn 0.25s var(--ease) both; }
+@keyframes cardIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
+.card .label { font-size: 11px; color: var(--text-3); letter-spacing: 0.3px; }
+.card .value { font-size: 20px; font-weight: 700; margin-top: 4px; color: var(--text-1); }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+th { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: 11px; color: var(--text-3); font-weight: 500; letter-spacing: 0.3px; }
+td { padding: 8px 10px; border-bottom: 1px solid var(--border-light); }
+tr:hover td { background: var(--bg-card); }
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--radius-pill); font-size: 11px; font-weight: 500; }
+.pill-green { background: var(--success-bg); color: var(--success); }
+.pill-yellow { background: var(--warning-bg); color: var(--warning); }
+.pill-red { background: var(--danger-bg); color: var(--danger); }
+.pill-gray { background: var(--bg-card); color: var(--text-4); border: 1px solid var(--border-light); }
+.pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.btn { padding: 5px 12px; border: 1px solid var(--border); border-radius: var(--radius-pill); cursor: pointer; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text-2); transition: all 0.15s var(--ease); }
+.btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); transform: scale(1.02); }
+.btn:active { transform: scale(0.96); }
+.btn-danger { color: var(--danger); border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: #fff; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fadeIn 0.15s; }
+@keyframes fadeIn { from{opacity:0} to{opacity:1} }
+.modal { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; max-width: 400px; width: 90%; animation: cardIn 0.2s var(--ease); }
+.modal h3 { font-size: 14px; margin-bottom: 8px; color: var(--text-1); }
+.modal p { font-size: 12px; color: var(--text-3); }
+.modal input { width: 100%; padding: 8px 12px; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-1); background: var(--bg); outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+.modal input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(78,110,242,0.08); }
+.modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+.mono { font-family: var(--mono); font-size: 11px; color: var(--text-2); }
+#theme-toggle { background: none; border: none; cursor: pointer; padding: 4px; border-radius: 6px; display: flex; align-items: center; transition: background 0.15s; }
+#theme-toggle:hover { background: var(--bg-card); }
+#theme-toggle svg { width: 18px; height: 18px; color: var(--text-3); transition: color 0.15s; }
+#theme-toggle:hover svg { color: var(--text-1); }
+</style>
+</head>
+<body>
+<div class="container">
+<h1><svg width="20" height="20" viewBox="40 37 466 466" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="40" y="37" width="466" height="466" rx="143" fill="#C5E0B4"/><path d="M176 90 C166 90 158 94 154 101 C151 106 149 113 149 122 V438 C149 451 154 460 164 466 C171 470 182 470 191 467 L405 391 C414 388 419 379 419 368 V190 C419 178 412 169 401 164 L191 91 C186 90 181 90 176 90Z" fill="black"/><polygon points="199,145 367,204 367,348 199,407" fill="white"/><rect x="223" y="218" width="74" height="38" fill="black"/><rect x="223" y="304" width="74" height="37" fill="black"/></svg>丹秘 Browser Bridge 管理后台<button id="theme-toggle" title="切换深色/浅色模式"><svg id="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg><svg id="icon-moon" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg></button></h1>
+<!-- AUTH GATE -->
+<div id="auth-gate">
+  <p style="margin-bottom:8px;color:var(--text-3)">请输入管理员 Token：</p>
+  <input id="token-input" type="password" placeholder="bb_adm_..." style="width:340px;padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12px;color:var(--text-1);background:var(--bg);outline:none">
+  <button id="login-btn" class="btn btn-primary" style="padding:8px 18px;margin-left:8px">登录</button>
+  <p id="auth-err" style="color:var(--danger);margin-top:8px;display:none;font-size:12px"></p>
+</div>
+<!-- MAIN PANEL (hidden until auth) -->
+<div id="main" style="display:none">
+<nav id="tabs" style="display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid var(--border)">
+  <button class="tab active" data-tab="overview">概览</button>
+  <button class="tab" data-tab="users">用户</button>
+  <button class="tab" data-tab="devices">设备</button>
+  <button class="tab" data-tab="sessions">会话</button>
+  <button class="tab" data-tab="audit">审计</button>
+</nav>
+<div id="tab-overview" class="tab-pane"></div>
+<div id="tab-users" class="tab-pane" style="display:none"></div>
+<div id="tab-devices" class="tab-pane" style="display:none"></div>
+<div id="tab-sessions" class="tab-pane" style="display:none"></div>
+<div id="tab-audit" class="tab-pane" style="display:none"></div>
+</div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+const BASE = location.origin;
+let TOKEN = sessionStorage.getItem('bb_admin_token') || '';
+
+// ─── Theme toggle ───
+function applyTheme(dark) {
+  document.documentElement.classList.toggle('dark', dark);
+  $('icon-sun').style.display = dark ? 'none' : '';
+  $('icon-moon').style.display = dark ? '' : 'none';
+  localStorage.setItem('bb_admin_theme', dark ? 'dark' : 'light');
+}
+(function initTheme() {
+  const saved = localStorage.getItem('bb_admin_theme');
+  const preferDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(preferDark);
+})();
+$('theme-toggle').addEventListener('click', () => {
+  applyTheme(!document.documentElement.classList.contains('dark'));
+});
+
+function api(path, opts = {}) {
+  return fetch(`${BASE}/api/v1${path}`, {
+    ...opts,
+    headers: { 'X-Admin-Token': TOKEN, 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  }).then(async r => {
+    if (r.status === 401 || r.status === 403) { logout(); throw new Error('auth'); }
+    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || r.statusText); }
+    return r.json();
+  });
+}
+
+function logout() { sessionStorage.removeItem('bb_admin_token'); TOKEN = ''; showAuth(); }
+function showAuth() { $('auth-gate').style.display = ''; $('main').style.display = 'none'; }
+function showMain() { $('auth-gate').style.display = 'none'; $('main').style.display = ''; loadTab('overview'); }
+
+function pill(text, color) { return `<span class="pill pill-${color}">${text}</span>`; }
+function statusPill(active) { return active ? pill('正常', 'green') : pill('已封禁', 'gray'); }
+function onlinePill(on, paused) { return on ? (paused ? pill('已暂停', 'yellow') : pill('在线', 'green')) : pill('离线', 'gray'); }
+
+// ─── Auth ───
+$('login-btn').addEventListener('click', tryLogin);
+$('token-input').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+
+async function tryLogin() {
+  const t = $('token-input').value.trim();
+  if (!t) return;
+  TOKEN = t;
+  try {
+    await api('/admin/overview');
+    sessionStorage.setItem('bb_admin_token', t);
+    showMain();
+  } catch (e) {
+    $('auth-err').textContent = 'Token 无效'; $('auth-err').style.display = '';
+    TOKEN = '';
+  }
+}
+
+// ─── Tabs ───
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    $('tab-' + btn.dataset.tab).style.display = '';
+    loadTab(btn.dataset.tab);
+  });
+});
+
+async function loadTab(name) {
+  try {
+    if (name === 'overview') await renderOverview();
+    else if (name === 'users') await renderUsers();
+    else if (name === 'devices') await renderDevices();
+    else if (name === 'sessions') await renderSessions();
+    else if (name === 'audit') await renderAudit();
+  } catch (e) { if (e.message !== 'auth') console.error(e); }
+}
+
+// ─── Overview ───
+async function renderOverview() {
+  const d = await api('/admin/overview');
+  $('tab-overview').innerHTML = `
+    <div class="cards">
+      <div class="card"><div class="label">用户</div><div class="value">${d.users.active}/${d.users.total}</div></div>
+      <div class="card"><div class="label">设备在线</div><div class="value">${d.devices.online}/${d.devices.active}</div></div>
+      <div class="card"><div class="label">已暂停</div><div class="value">${d.devices.paused}</div></div>
+      <div class="card"><div class="label">活跃会话</div><div class="value">${d.sessions.active}</div></div>
+      <div class="card"><div class="label">24h 命令</div><div class="value">${d.commands_24h.total}</div></div>
+      <div class="card"><div class="label">24h 失败</div><div class="value">${d.commands_24h.failed}</div></div>
+      <div class="card"><div class="label">运行时间</div><div class="value">${Math.round(d.uptime_seconds/60)}m</div></div>
+      <div class="card"><div class="label">版本</div><div class="value">${d.version}</div></div>
+    </div>`;
+}
+
+// ─── Users ───
+async function renderUsers() {
+  const users = await api('/admin/users');
+  let html = `<div style="margin-bottom:12px"><button class="btn" onclick="showCreateUser()">+ 新建用户</button></div>`;
+  html += `<table><tr><th>名称</th><th>状态</th><th>设备</th><th>在线</th><th>Eval</th><th>Net</th><th>操作</th></tr>`;
+  for (const u of users) {
+    html += `<tr>
+      <td>${u.name}</td>
+      <td>${statusPill(u.is_active)}</td>
+      <td>${u.active_devices}/${u.total_devices}</td>
+      <td>${u.online_devices}</td>
+      <td>${u.evaluate_enabled ? pill('开','green') : pill('关','gray')}</td>
+      <td>${u.network_enabled ? pill('开','green') : pill('关','gray')}</td>
+      <td>
+        <button class="btn" onclick="doPairingCode('${u.id}')">配对码</button>
+        <button class="btn" onclick="toggleEval('${u.id}',${u.evaluate_enabled})">${u.evaluate_enabled?'关闭':'开启'} Eval</button>
+        <button class="btn" onclick="toggleNet('${u.id}',${u.network_enabled})">${u.network_enabled?'关闭':'开启'} Net</button>
+        ${u.is_active ? `<button class="btn btn-danger" onclick="confirmRevoke('user','${u.id}','${u.name}')">封禁</button>` : ''}
+      </td></tr>`;
+  }
+  html += `</table>`;
+  $('tab-users').innerHTML = html;
+}
+
+async function showCreateUser() {
+  const name = prompt('请输入新用户名：');
+  if (!name) return;
+  const r = await api('/admin/users', { method: 'POST', body: { name } });
+  alert(`用户已创建！\nToken（仅显示一次，请立即复制）：\n${r.token}`);
+  renderUsers();
+}
+async function doPairingCode(uid) {
+  const r = await api(`/admin/users/${uid}/pairing-code`, { method: 'POST' });
+  alert(`配对码：${r.code}\n过期时间：${r.expires_at}`);
+}
+async function toggleEval(uid, current) {
+  await api(`/admin/users/${uid}/evaluate`, { method: 'POST', body: { enabled: !current, domains: '*' } });
+  renderUsers();
+}
+async function toggleNet(uid, current) {
+  await api(`/admin/users/${uid}/network`, { method: 'POST', body: { enabled: !current } });
+  renderUsers();
+}
+
+// ─── Devices ───
+async function renderDevices() {
+  const devs = await api('/admin/devices');
+  let html = `<table><tr><th>名称</th><th>用户</th><th>状态</th><th>在线</th><th>扩展版本</th><th>最后在线</th><th>操作</th></tr>`;
+  for (const d of devs) {
+    html += `<tr>
+      <td>${d.name}</td><td>${d.user_name}</td>
+      <td>${statusPill(d.is_active)}</td>
+      <td>${onlinePill(d.online, d.paused)}</td>
+      <td>${d.ext_version||''}</td>
+      <td style="font-size:11px">${d.last_seen_at||''}</td>
+      <td>${d.is_active ? `<button class="btn btn-danger" onclick="confirmRevoke('device','${d.id}','${d.name}')">封禁</button>` : ''}</td>
+    </tr>`;
+  }
+  html += `</table>`;
+  $('tab-devices').innerHTML = html;
+}
+
+// ─── Sessions ───
+async function renderSessions() {
+  const ss = await api('/admin/sessions?state=active');
+  let html = `<table><tr><th>ID</th><th>用户</th><th>设备</th><th>状态</th><th>最后活动</th></tr>`;
+  for (const s of ss) {
+    html += `<tr><td style="font-size:11px">${s.id.slice(0,8)}</td><td>${s.user_name}</td><td style="font-size:11px">${s.device_id.slice(0,8)}</td><td>${pill(s.state,'green')}</td><td style="font-size:11px">${s.last_activity_at||''}</td></tr>`;
+  }
+  html += `</table>`;
+  if (!ss.length) html = '<p style="color:var(--muted)">暂无活跃会话。</p>';
+  $('tab-sessions').innerHTML = html;
+}
+
+// ─── Audit ───
+async function renderAudit() {
+  const data = await api('/admin/audit?limit=50');
+  const entries = data.entries || [];
+  // Build actor_id -> name map
+  let userMap = {};
+  try { const users = await api('/admin/users'); users.forEach(u => { userMap[u.id] = u.name; }); } catch(e) {}
+  let html = `<table><tr><th>时间</th><th>事件</th><th>操作者</th><th>详情</th></tr>`;
+  for (const e of entries) {
+    const actor = e.actor_id ? (userMap[e.actor_id] || e.actor_id.slice(0,8)) : '—';
+    html += `<tr><td style="font-size:11px">${e.created_at}</td><td>${e.event_type}</td><td>${actor}</td><td style="font-size:11px;max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${JSON.stringify(e.detail)}</td></tr>`;
+  }
+  html += `</table>`;
+  $('tab-audit').innerHTML = html;
+}
+
+// ─── Confirm modal for high-risk ───
+function confirmRevoke(type, id, name) {
+  const typeLabel = type === 'user' ? '用户' : '设备';
+  const div = document.createElement('div');
+  div.className = 'modal-bg';
+  div.innerHTML = `<div class="modal">
+    <h3>封禁${typeLabel}：${name}</h3>
+    <p style="color:var(--muted);font-size:13px">${type === 'user' ? '此操作将封禁该用户及其所有设备，活跃的 WebSocket 连接将被断开。' : '此操作将封禁该设备并断开其 WebSocket 连接。'}</p>
+    <input id="confirm-name" placeholder="输入 '${name}' 确认">
+    <div class="actions">
+      <button class="btn" onclick="this.closest('.modal-bg').remove()">取消</button>
+      <button class="btn btn-danger" id="confirm-btn">确认封禁</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  div.querySelector('#confirm-btn').addEventListener('click', async () => {
+    if (div.querySelector('#confirm-name').value !== name) { alert('名称不匹配'); return; }
+    await api(`/admin/${type === 'user' ? 'users' : 'devices'}/${id}/revoke`, { method: 'POST' });
+    div.remove();
+    if (type === 'user') renderUsers(); else renderDevices();
+  });
+}
+
+// ─── Init ───
+if (TOKEN) { api('/admin/overview').then(showMain).catch(showAuth); } else { showAuth(); }
+setInterval(() => { if ($('main').style.display !== 'none') loadTab('overview'); }, 10000);
+</script>
+</body>
+</html>

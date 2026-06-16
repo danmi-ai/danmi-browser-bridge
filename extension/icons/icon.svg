@@ -1,0 +1,7 @@
+<svg width="128" height="128" viewBox="40 37 466 466" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="40" y="37" width="466" height="466" rx="143" fill="#C5E0B4"/>
+  <path d="M176 90 C166 90 158 94 154 101 C151 106 149 113 149 122 V438 C149 451 154 460 164 466 C171 470 182 470 191 467 L405 391 C414 388 419 379 419 368 V190 C419 178 412 169 401 164 L191 91 C186 90 181 90 176 90Z" fill="black"/>
+  <polygon points="199,145 367,204 367,348 199,407" fill="white"/>
+  <rect x="223" y="218" width="74" height="38" fill="black"/>
+  <rect x="223" y="304" width="74" height="37" fill="black"/>
+</svg>

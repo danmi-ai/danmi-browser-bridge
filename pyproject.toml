@@ -1,0 +1,49 @@
+[project]
+name = "danmi-browser-bridge"
+version = "0.8.4"
+description = "Cross-machine browser automation: thin Chrome extension + Command API server"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.6.0",
+    "websockets>=14,<16",
+    "structlog>=24.1.0",
+    "httpx>=0.27.0",
+    "prometheus-client>=0.20.0",
+    "tomli>=2.0.0; python_version < '3.11'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.3.0",
+]
+
+[project.scripts]
+browser-bridge = "server.main:main"
+browser-bridge-cli = "server.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["server", "sdk/danmi_bridge"]
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+extend-exclude = ["internal", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

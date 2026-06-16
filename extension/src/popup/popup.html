@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="brand" id="brand" role="link" tabindex="0" title="打开丹秘 Browser Bridge 官网"><img src="../../icons/icon.svg" class="brand-logo" alt="">丹秘 Browser Bridge</div>
+    <div class="status-pill" id="pill">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-label">连接中</span>
+    </div>
+  </header>
+
+  <!-- 新手引导 -->
+  <div class="guide-card hidden" id="guide">
+    <h4>✓ 连接成功！</h4>
+    <ul>
+      <li>AI 助手现在可以打开网页并读取内容</li>
+      <li>可以点击按钮、填写表单、截图</li>
+      <li>支持网络抓包和导出 PDF</li>
+    </ul>
+    <p class="guide-note">你随时可以点击「暂停」来拒绝命令</p>
+    <button class="guide-dismiss" id="guide-dismiss">知道了</button>
+  </div>
+
+  <!-- 已连接视图 -->
+  <section id="view-connected" class="view hidden">
+    <!-- 暂停横幅 -->
+    <div class="pause-overlay hidden" id="pause-overlay">
+      <div class="pause-icon">⏸</div>
+      <div class="pause-text">
+        <div class="pause-title">命令已暂停</div>
+        <div class="pause-desc">AI 发来的所有命令将被拒绝</div>
+      </div>
+      <button class="btn-resume" id="btn-resume">恢复</button>
+    </div>
+
+    <div id="main-content">
+    <div class="card">
+      <div class="card-row">
+        <span class="card-label">服务器</span>
+        <span class="card-value" id="info-server">—</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">设备 ID</span>
+        <span class="card-value mono" id="info-device">—</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">在线时长</span>
+        <span class="card-value" id="info-uptime">—</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">心跳延迟 <span class="tip-icon">?<span class="tooltip">服务器每 15 秒探测一次，此为往返延迟</span></span></span>
+        <span class="card-value" id="info-heartbeat">—</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">活跃会话 <span class="tip-icon">?<span class="tooltip">当前有多少个任务正在使用你的浏览器</span></span></span>
+        <span class="card-value" id="info-sessions">0</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">已执行命令</span>
+        <span class="card-value" id="info-cmds">0</span>
+      </div>
+      <div class="card-row">
+        <span class="card-label">网络监控 <span class="tip-icon">?<span class="tooltip">启动后顶部会出现黄色调试横幅，停止后消失</span></span></span>
+        <span class="card-value" id="info-network">未启动</span>
+      </div>
+    </div>
+
+    <div class="btn-tip" id="btn-tip"></div>
+    <div class="btn-group">
+      <button id="btn-pause" class="btn btn-outline">暂停</button>
+      <button id="btn-reconnect" class="btn btn-outline">重连</button>
+    </div>
+    <button id="btn-disconnect" class="btn btn-danger-ghost">断开连接</button>
+
+    <div class="section-title">最近命令</div>
+    <div class="card history-card">
+      <div class="history-empty" id="history-empty">暂无命令记录</div>
+      <ul class="history-list" id="history-list"></ul>
+    </div>
+    </div><!-- /main-content -->
+  </section>
+
+  <!-- 配对视图 -->
+  <section id="view-pairing" class="view hidden">
+    <div class="card">
+      <p class="hint">输入服务器地址和配对码以连接浏览器</p>
+      <label class="field-label">服务器地址</label>
+      <input type="text" id="input-server" class="field-input" placeholder="自动获取中…">
+      <label class="field-label">配对码</label>
+      <input type="text" id="input-code" class="field-input" placeholder="输入 6 位配对码" maxlength="6" autocomplete="off">
+      <button id="btn-connect" class="btn btn-primary">连接</button>
+    </div>
+    <div class="error-toast hidden" id="pair-error"></div>
+  </section>
+
+  <!-- 升级提示 -->
+  <div id="upgrade-banner" class="update-banner hidden">
+    <div class="update-head">
+      <span class="update-title" id="upgrade-title">新版本可用</span>
+      <button class="update-close hidden" id="upgrade-close" title="本版本不再提示">✕</button>
+    </div>
+    <div class="update-ver" id="upgrade-ver"></div>
+    <div class="update-step"><span class="update-step-num">1</span> 在 Mac 终端运行</div>
+    <div class="copy-box" id="upgrade-copy" data-cmd="">
+      <code id="upgrade-cmd">curl -sL .../install.sh | bash</code>
+      <span class="copy-ic">⎘</span>
+    </div>
+    <div class="update-step"><span class="update-step-num">2</span> chrome://extensions 点 🔄 刷新</div>
+  </div>
+
+  <footer>
+    <span class="footer-ver" id="footer-ver">ext v0.8.0 · server —</span>
+    <button class="btn-check" id="btn-check">
+      <span class="check-ic">↻</span>
+      <span class="check-label">检查更新</span>
+    </button>
+  </footer>
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>

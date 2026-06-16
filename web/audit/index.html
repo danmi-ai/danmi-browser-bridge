@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20width%3D%22128%22%20height%3D%22128%22%20viewBox%3D%2240%2037%20466%20466%22%20fill%3D%22none%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%20%3Crect%20x%3D%2240%22%20y%3D%2237%22%20width%3D%22466%22%20height%3D%22466%22%20rx%3D%22143%22%20fill%3D%22%23C5E0B4%22%2F%3E%20%3Cpath%20d%3D%22M176%2090%20C166%2090%20158%2094%20154%20101%20C151%20106%20149%20113%20149%20122%20V438%20C149%20451%20154%20460%20164%20466%20C171%20470%20182%20470%20191%20467%20L405%20391%20C414%20388%20419%20379%20419%20368%20V190%20C419%20178%20412%20169%20401%20164%20L191%2091%20C186%2090%20181%2090%20176%2090Z%22%20fill%3D%22black%22%2F%3E%20%3Cpolygon%20points%3D%22199%2C145%20367%2C204%20367%2C348%20199%2C407%22%20fill%3D%22white%22%2F%3E%20%3Crect%20x%3D%22223%22%20y%3D%22218%22%20width%3D%2274%22%20height%3D%2238%22%20fill%3D%22black%22%2F%3E%20%3Crect%20x%3D%22223%22%20y%3D%22304%22%20width%3D%2274%22%20height%3D%2237%22%20fill%3D%22black%22%2F%3E%20%3C%2Fsvg%3E">
+<title>Browser Bridge — 我的审计日志</title>
+<style>
+  :root {
+    --bg: #ffffff; --bg-2: #f5f5f0; --bg-3: #eeede8;
+    --text: #1a1a1a; --muted: #6b6b6b; --faint: #9b9b9b;
+    --border: rgba(0,0,0,0.10); --border-2: rgba(0,0,0,0.18);
+    --info-bg: #e8f0fe; --info-text: #1a56db;
+    --ok-bg: #e8f5e9; --ok-text: #1e7e34;
+    --warn-bg: #fff8e1; --warn-text: #b45309;
+    --err-bg: #fde8e8; --err-text: #c81e1e;
+    --mono: 'Berkeley Mono', 'Fira Code', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: 'Anthropic Sans', 'DM Sans', system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", "Segoe UI", Roboto, sans-serif;
+    --radius-md: 8px; --radius-lg: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a1a; --bg-2: #242424; --bg-3: #2e2e2e;
+      --text: #ebebeb; --muted: #9b9b9b; --faint: #6b6b6b;
+      --border: rgba(255,255,255,0.10); --border-2: rgba(255,255,255,0.18);
+      --info-bg: #1a2744; --info-text: #7eaaff;
+      --ok-bg: #1a2e1a; --ok-text: #5cdb95;
+      --warn-bg: #2e2010; --warn-text: #ffb84d;
+      --err-bg: #2e1a1a; --err-text: #ff6b6b;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; font-family: var(--sans); color: var(--text); background: var(--bg); line-height: 1.5; }
+  h1 { font-size: 22px; margin: 0 0 4px 0; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .container { max-width: 1100px; margin: 0 auto; }
+
+  .panel { background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 20px; margin-bottom: 16px; }
+  .panel h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px 0; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--muted); }
+  .field input, .field select {
+    background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: var(--radius-md); padding: 6px 10px; font: inherit; font-size: 13px;
+    min-width: 160px;
+  }
+  .field input[type="password"] { font-family: var(--mono); }
+
+  button {
+    background: var(--info-bg); color: var(--info-text); border: 1px solid var(--info-text);
+    border-radius: var(--radius-md); padding: 6px 14px; font: inherit; font-size: 13px;
+    cursor: pointer; transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.btn-ghost { background: transparent; color: var(--muted); border-color: var(--border-2); }
+  button.btn-danger { background: var(--err-bg); color: var(--err-text); border-color: var(--err-text); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: var(--bg-3); font-weight: 500; color: var(--muted); position: sticky; top: 0; }
+  td.mono { font-family: var(--mono); font-size: 12px; word-break: break-all; }
+  td.cmd { font-family: var(--mono); font-weight: 500; }
+  .pill {
+    display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+    background: var(--bg-3); color: var(--muted);
+  }
+  .pill.ok { background: var(--ok-bg); color: var(--ok-text); }
+  .pill.err { background: var(--err-bg); color: var(--err-text); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn-text); }
+
+  .empty { padding: 40px; text-align: center; color: var(--faint); font-size: 13px; }
+  .err-banner { background: var(--err-bg); color: var(--err-text); border: 1px solid var(--err-text); padding: 12px 16px; border-radius: var(--radius-md); margin-bottom: 16px; font-size: 13px; }
+  .ok-banner { background: var(--ok-bg); color: var(--ok-text); border: 1px solid var(--ok-text); padding: 8px 14px; border-radius: var(--radius-md); margin-bottom: 12px; font-size: 12px; }
+  .hidden { display: none !important; }
+
+  details summary { cursor: pointer; font-size: 12px; color: var(--info-text); }
+  details pre { font-family: var(--mono); font-size: 11px; background: var(--bg-3); padding: 8px; border-radius: 4px; margin-top: 6px; max-height: 200px; overflow: auto; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>我的审计日志</h1>
+  <p class="sub">Browser Bridge — 查看丹秘代你执行的命令记录。<strong>token 仅存在浏览器 sessionStorage 里</strong>，关闭页面即清。</p>
+
+  <div id="err-banner" class="err-banner hidden"></div>
+  <div id="ok-banner" class="ok-banner hidden"></div>
+
+  <section id="sid-panel" class="panel hidden">
+    <h2>会话模式（推荐）</h2>
+    <p class="sub" style="margin-bottom:12px">通过 popup「查看我的审计记录」按钮打开本页时，URL 会带一个 5 分钟有效的 <code>sid</code>。这种方式 token 不会进 URL、不会进浏览器历史，关闭标签页即失效。</p>
+    <div class="row">
+      <div class="field">
+        <label for="sid-event-type">事件类型</label>
+        <select id="sid-event-type">
+          <option value="">全部</option>
+          <option value="command_executed">命令执行</option>
+          <option value="evaluate_authorized">evaluate 已授权</option>
+          <option value="evaluate_denied">evaluate 被拒</option>
+          <option value="fetch_authorized">fetch 已授权</option>
+          <option value="fetch_denied">fetch 被拒</option>
+          <option value="command_rate_limited">触发限流</option>
+          <option value="dispute_raised">已申诉</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sid-cmd">命令名（可选）</label>
+        <input id="sid-cmd" type="text" placeholder="snapshot / evaluate / …">
+      </div>
+      <div class="field">
+        <label for="sid-limit">条数</label>
+        <input id="sid-limit" type="number" min="1" max="500" value="50">
+      </div>
+      <button id="sid-load-btn">查询</button>
+    </div>
+  </section>
+
+  <section id="token-panel" class="panel">
+    <h2>Token 模式 <span style="font-weight:400;color:var(--warn-text);text-transform:none;letter-spacing:0">（已废弃，过渡期保留；请改用 popup 入口）</span></h2>
+    <div class="row">
+      <div class="field">
+        <label for="server">服务地址</label>
+        <input id="server" type="url" placeholder="http://your-server:8403" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="token">用户 Token（bb_user_…）</label>
+        <input id="token" type="password" placeholder="bb_user_..." autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="event_type">事件类型</label>
+        <select id="event_type">
+          <option value="">全部</option>
+          <option value="command_executed">命令执行</option>
+          <option value="evaluate_authorized">evaluate 已授权</option>
+          <option value="evaluate_denied">evaluate 被拒</option>
+          <option value="fetch_authorized">fetch 已授权</option>
+          <option value="fetch_denied">fetch 被拒</option>
+          <option value="command_rate_limited">触发限流</option>
+          <option value="dispute_raised">已申诉</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="cmd">命令名（可选）</label>
+        <input id="cmd" type="text" placeholder="snapshot / evaluate / …">
+      </div>
+      <div class="field">
+        <label for="limit">条数</label>
+        <input id="limit" type="number" min="1" max="500" value="50">
+      </div>
+      <button id="load-btn">查询</button>
+      <button id="clear-btn" class="btn-ghost">清空 Token</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>记录（最新在前）</h2>
+    <div id="result-wrap"><div class="empty">输入 token 后点「查询」</div></div>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+const $ = (id) => document.getElementById(id);
+const STORE_KEY_TOKEN = "bb.audit.token";
+const STORE_KEY_SERVER = "bb.audit.server";
+
+function setErr(msg) {
+  const el = $("err-banner");
+  if (!msg) { el.classList.add("hidden"); el.textContent = ""; return; }
+  el.textContent = msg; el.classList.remove("hidden");
+}
+function setOk(msg) {
+  const el = $("ok-banner");
+  if (!msg) { el.classList.add("hidden"); el.textContent = ""; return; }
+  el.textContent = msg; el.classList.remove("hidden");
+  setTimeout(() => el.classList.add("hidden"), 2500);
+}
+
+function loadStored() {
+  try {
+    const t = sessionStorage.getItem(STORE_KEY_TOKEN);
+    const s = sessionStorage.getItem(STORE_KEY_SERVER);
+    if (t) $("token").value = t;
+    if (s) $("server").value = s;
+    // 默认用当前页面 origin（由 server /static 托管时即为 server 地址）
+    else $("server").value = location.origin.replace(/\/static\/?$/, "");
+  } catch (_) {
+    $("server").value = location.origin.replace(/\/static\/?$/, "");
+  }
+}
+
+function persist() {
+  try {
+    sessionStorage.setItem(STORE_KEY_TOKEN, $("token").value.trim());
+    sessionStorage.setItem(STORE_KEY_SERVER, $("server").value.trim());
+  } catch (_) {}
+}
+
+function pillForEventType(et) {
+  if (!et) return "";
+  if (et === "command_executed") return '<span class="pill ok">' + et + '</span>';
+  if (et.endsWith("_denied") || et === "command_rate_limited") return '<span class="pill warn">' + et + '</span>';
+  if (et === "dispute_raised") return '<span class="pill err">' + et + '</span>';
+  return '<span class="pill">' + et + '</span>';
+}
+function pillForStatus(s) {
+  if (!s) return "—";
+  if (s === "completed") return '<span class="pill ok">completed</span>';
+  if (s === "failed") return '<span class="pill err">failed</span>';
+  return '<span class="pill">' + escapeHtml(s) + '</span>';
+}
+function escapeHtml(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function fmtTime(s) {
+  if (!s) return "";
+  try {
+    const d = new Date(s.replace(" ", "T") + (s.endsWith("Z") || /[+\-]\d{2}:\d{2}$/.test(s) ? "" : "Z"));
+    if (isNaN(d.getTime())) return s;
+    const Y = d.getFullYear();
+    const M = String(d.getMonth() + 1).padStart(2, "0");
+    const D = String(d.getDate()).padStart(2, "0");
+    const h = String(d.getHours()).padStart(2, "0");
+    const m = String(d.getMinutes()).padStart(2, "0");
+    const sec = String(d.getSeconds()).padStart(2, "0");
+    return `${Y}-${M}-${D} ${h}:${m}:${sec}`;
+  } catch (_) {
+    return s;
+  }
+}
+
+async function loadAudit() {
+  setErr("");
+  const server = $("server").value.trim().replace(/\/$/, "");
+  const token = $("token").value.trim();
+  if (!server || !token) {
+    setErr("请填写服务地址和 token。");
+    return;
+  }
+  persist();
+
+  const params = new URLSearchParams();
+  params.set("limit", $("limit").value || "50");
+  if ($("event_type").value) params.set("event_type", $("event_type").value);
+  if ($("cmd").value) params.set("cmd", $("cmd").value);
+
+  $("load-btn").disabled = true;
+  $("load-btn").textContent = "查询中…";
+  try {
+    const r = await fetch(`${server}/api/v1/audit/me?` + params.toString(), {
+      headers: { "Authorization": "Bearer " + token },
+    });
+    if (r.status === 401 || r.status === 403) {
+      setErr("Token 无效或权限不足。");
+      $("result-wrap").innerHTML = '<div class="empty">认证失败</div>';
+      return;
+    }
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      setErr(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+      return;
+    }
+    const data = await r.json();
+    renderRows(data.items || [], server, token);
+  } catch (e) {
+    setErr("网络错误：" + (e && e.message || e));
+  } finally {
+    $("load-btn").disabled = false;
+    $("load-btn").textContent = "查询";
+  }
+}
+
+function renderRows(rows, server, token) {
+  const wrap = $("result-wrap");
+  if (!rows.length) {
+    wrap.innerHTML = '<div class="empty">无记录</div>';
+    return;
+  }
+  const showActions = !!token; // sid mode (token === null) hides dispute column
+  let html = '<table><thead><tr>' +
+    '<th>时间</th><th>事件</th><th>命令</th><th>目标</th><th>状态</th><th>详情</th>' +
+    (showActions ? '<th></th>' : '') +
+    '</tr></thead><tbody>';
+  for (const row of rows) {
+    const detailJson = JSON.stringify(row.detail || {}, null, 2);
+    html += '<tr>' +
+      `<td class="mono">${escapeHtml(fmtTime(row.created_at))}</td>` +
+      `<td>${pillForEventType(row.event_type)}</td>` +
+      `<td class="cmd">${escapeHtml(row.cmd || "")}</td>` +
+      `<td class="mono">${escapeHtml(row.target_url || "")}</td>` +
+      `<td>${pillForStatus(row.status)}</td>` +
+      `<td><details><summary>展开</summary><pre>${escapeHtml(detailJson)}</pre></details></td>` +
+      (showActions
+        ? `<td><button class="btn-danger dispute-btn" data-id="${row.id}">这条不对</button></td>`
+        : '') +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  if (showActions) {
+    wrap.querySelectorAll(".dispute-btn").forEach((btn) => {
+      btn.addEventListener("click", () => raiseDispute(btn.dataset.id, server, token, btn));
+    });
+  }
+}
+
+async function raiseDispute(id, server, token, btn) {
+  if (!confirm("确认这条记录不是你授权的？将记入审计链。")) return;
+  const note = prompt("可选说明（最多 500 字）：", "");
+  btn.disabled = true;
+  btn.textContent = "提交中…";
+  try {
+    const r = await fetch(`${server}/api/v1/audit/${id}/dispute`, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ note: note || "" }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      setErr(`申诉失败 HTTP ${r.status}: ${txt.slice(0, 200)}`);
+      btn.disabled = false; btn.textContent = "这条不对";
+      return;
+    }
+    setOk("已记录申诉。");
+    btn.textContent = "已申诉 ✓";
+  } catch (e) {
+    setErr("网络错误：" + (e && e.message || e));
+    btn.disabled = false; btn.textContent = "这条不对";
+  }
+}
+
+$("load-btn").addEventListener("click", loadAudit);
+$("clear-btn").addEventListener("click", () => {
+  $("token").value = "";
+  try { sessionStorage.removeItem(STORE_KEY_TOKEN); } catch (_) {}
+  setOk("Token 已清空。");
+});
+$("token").addEventListener("change", persist);
+$("server").addEventListener("change", persist);
+loadStored();
+
+// ---- sid mode (v0.5.0) ----
+// If URL has ?sid=..., default to session mode: hide the deprecated token
+// panel, show the sid panel, auto-load. The sid is consumed entirely from
+// memory; we never write it to sessionStorage.
+const SID_PARAM = (() => {
+  try { return new URL(location.href).searchParams.get("sid") || ""; }
+  catch (_) { return ""; }
+})();
+const SERVER_FROM_LOCATION = location.origin && /^https?:\/\//.test(location.origin)
+  ? location.origin
+  : "";
+
+async function loadAuditWithSid() {
+  setErr("");
+  if (!SID_PARAM) {
+    setErr("缺少 sid，请重新从 popup 打开本页。");
+    return;
+  }
+  const server = SERVER_FROM_LOCATION || $("server").value.trim().replace(/\/$/, "");
+  if (!server) { setErr("无法推断服务地址。"); return; }
+
+  const body = {
+    sid: SID_PARAM,
+    limit: parseInt($("sid-limit").value || "50", 10),
+  };
+  if ($("sid-event-type").value) body.event_type = $("sid-event-type").value;
+  if ($("sid-cmd").value) body.cmd = $("sid-cmd").value;
+
+  $("sid-load-btn").disabled = true;
+  $("sid-load-btn").textContent = "查询中…";
+  try {
+    const r = await fetch(`${server}/api/v1/audit/query`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.status === 401) { setErr("sid 无效。"); return; }
+    if (r.status === 410) { setErr("sid 已过期（5 分钟），请重新从 popup 打开本页。"); return; }
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      setErr(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+      return;
+    }
+    const data = await r.json();
+    // sid mode disables dispute (it needs a real user_token); render without
+    // the action column.
+    renderRows(data.items || [], server, /*token=*/null);
+  } catch (e) {
+    setErr("网络错误：" + (e && e.message || e));
+  } finally {
+    $("sid-load-btn").disabled = false;
+    $("sid-load-btn").textContent = "查询";
+  }
+}
+
+if (SID_PARAM) {
+  $("sid-panel").classList.remove("hidden");
+  $("token-panel").classList.add("hidden");
+  $("sid-load-btn").addEventListener("click", loadAuditWithSid);
+  // auto-load on first paint
+  setTimeout(loadAuditWithSid, 0);
+}
+</script>
+</body>
+</html>
