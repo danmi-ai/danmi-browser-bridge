@@ -140,28 +140,31 @@ async def _list_users(active_only: bool, as_json: bool) -> None:
 
 async def _show_user(user_ref: str) -> None:
     db, _ = await _init_db()
-    user = await _resolve_user(db, user_ref)
-    if user is None:
-        print(f"Error: user {user_ref!r} not found", file=sys.stderr)
+    try:
+        user = await _resolve_user(db, user_ref)
+        if user is None:
+            print(f"Error: user {user_ref!r} not found", file=sys.stderr)
+            sys.exit(1)
+        devices = await db.fetchall(
+            "SELECT id, name, is_active, last_seen_at, created_at FROM devices "
+            "WHERE user_id = ? ORDER BY created_at DESC",
+            (user["id"],),
+        )
+        sessions = await db.fetchall(
+            "SELECT id, device_id, state, created_at, last_activity_at "
+            "FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
+            (user["id"],),
+        )
+        # LOG-1: pairing codes are hashed at rest; plaintext is no longer stored
+        # and cannot be displayed here. Expose only non-sensitive metadata.
+        pending_codes = await db.fetchall(
+            "SELECT id, expires_at, used FROM pairing_codes "
+            "WHERE user_id = ? AND used = 0 AND expires_at > datetime('now') "
+            "ORDER BY expires_at DESC",
+            (user["id"],),
+        )
+    finally:
         await db.close()
-        sys.exit(1)
-    devices = await db.fetchall(
-        "SELECT id, name, is_active, last_seen_at, created_at FROM devices "
-        "WHERE user_id = ? ORDER BY created_at DESC",
-        (user["id"],),
-    )
-    sessions = await db.fetchall(
-        "SELECT id, device_id, state, created_at, last_activity_at "
-        "FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10",
-        (user["id"],),
-    )
-    pending_codes = await db.fetchall(
-        "SELECT code, expires_at, used FROM pairing_codes "
-        "WHERE user_id = ? AND used = 0 AND expires_at > datetime('now') "
-        "ORDER BY expires_at DESC",
-        (user["id"],),
-    )
-    await db.close()
     _print_json(
         {
             "user": user,

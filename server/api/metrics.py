@@ -1,6 +1,6 @@
 """Prometheus metrics endpoint — GET /api/v1/metrics.
 
-Internal monitoring; no auth (we trust the network boundary). Exposes:
+Internal monitoring; requires the admin token (X-Admin-Token). Exposes:
 
   bb_connected_devices         (gauge) WS-connected extension count
   bb_active_sessions           (gauge) sessions in state='active'
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import time
 
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Header, Response
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
     CollectorRegistry,
@@ -94,8 +94,13 @@ def observe_command(cmd: str, status: str, duration_seconds: float) -> None:
 
 
 @router.get("/metrics")
-async def metrics_endpoint():
+async def metrics_endpoint(
+    x_admin_token: str | None = Header(default=None, alias="X-Admin-Token"),
+):
     """Prometheus text format scrape endpoint."""
+    from server.api.admin import _check_admin
+
+    _check_admin(x_admin_token)
     # Refresh gauges on every scrape.
     bb_uptime_seconds.set(time.time() - _start_time)
     if _cm is not None:

@@ -162,8 +162,11 @@ def test_unpaused_device_passes():
     check("unpaused device -> command sent downstream", len(cm.sent) == 1, f"sent={cm.sent}")
 
 
-def test_offline_device_502_not_423():
-    # Pause gate must not mask the offline case.
+def test_offline_device_404_unknown():
+    # AUTHZ-1: an explicit device_id the caller doesn't own (or that isn't
+    # connected) is indistinguishable to the caller — both return 404
+    # DEVICE_NOT_FOUND so existence can't be probed. (Previously an unconnected
+    # explicit device returned 502 DEVICE_OFFLINE.)
     cm = FakeConnectionManager()  # nothing connected
     client = _build_client(cm)
 
@@ -172,13 +175,36 @@ def test_offline_device_502_not_423():
         json={"action": "snapshot", "args": {}, "device_id": DEVICE_ID},
         headers={"Authorization": "Bearer x"},
     )
-    check("offline explicit device -> 502", resp.status_code == 502, f"got {resp.status_code}")
+    check("unknown explicit device -> 404", resp.status_code == 404, f"got {resp.status_code}")
     detail = resp.json().get("detail", {})
     check(
-        "offline -> code DEVICE_OFFLINE",
-        detail.get("code") == "DEVICE_OFFLINE",
+        "unknown -> code DEVICE_NOT_FOUND",
+        detail.get("code") == "DEVICE_NOT_FOUND",
         f"detail={detail}",
     )
+
+
+def test_idor_other_users_device_404():
+    # AUTHZ-1: amy must not be able to drive bob's connected device by passing
+    # its device_id explicitly. Bob's device is online but owned by someone
+    # else -> 404 (not 200, not 403).
+    cm = FakeConnectionManager()
+    cm.add(DEVICE_ID, "usr_bob", paused=False)  # bob's device, online
+    client = _build_client(cm)  # auth overridden to usr_test (amy)
+
+    resp = client.post(
+        "/api/v1/command",
+        json={"action": "snapshot", "args": {}, "device_id": DEVICE_ID},
+        headers={"Authorization": "Bearer x"},
+    )
+    check("IDOR cross-user device -> 404", resp.status_code == 404, f"got {resp.status_code}")
+    detail = resp.json().get("detail", {})
+    check(
+        "IDOR -> code DEVICE_NOT_FOUND",
+        detail.get("code") == "DEVICE_NOT_FOUND",
+        f"detail={detail}",
+    )
+    check("IDOR -> command NOT sent downstream", cm.sent == [], f"sent={cm.sent}")
 
 
 def main():
@@ -189,7 +215,8 @@ def main():
         test_paused_device_rejected_423,
         test_paused_device_auto_resolve_423,
         test_unpaused_device_passes,
-        test_offline_device_502_not_423,
+        test_offline_device_404_unknown,
+        test_idor_other_users_device_404,
     ):
         print(f"\n  [{fn.__name__}]")
         fn()

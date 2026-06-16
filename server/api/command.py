@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from server.audit.logger import AuditLogger
 from server.auth.dependencies import require_user_auth
 from server.auth.evaluate import EvaluateNotAllowed, assert_evaluate_allowed
 from server.auth.network import NetworkNotAllowed, assert_network_allowed
@@ -24,6 +25,7 @@ router = APIRouter()
 _db: Database | None = None
 _connection_manager: ConnectionManager | None = None
 _rate_limiter = None
+_audit_logger: AuditLogger | None = None
 
 _ACTION_TIMEOUTS: dict[str, float] = {
     "navigate": 30.0,
@@ -38,19 +40,58 @@ _ACTION_TIMEOUTS: dict[str, float] = {
 }
 _DEFAULT_TIMEOUT: float = 15.0
 
-_FORBIDDEN_SCHEMES = frozenset(
-    ("javascript", "data", "file", "chrome", "chrome-extension", "about")
-)
-
 
 def init_command_router(
-    db: Database, connection_manager: ConnectionManager, rate_limiter
+    db: Database,
+    connection_manager: ConnectionManager,
+    rate_limiter,
+    audit_logger: AuditLogger | None = None,
 ) -> APIRouter:
-    global _db, _connection_manager, _rate_limiter
+    global _db, _connection_manager, _rate_limiter, _audit_logger
     _db = db
     _connection_manager = connection_manager
     _rate_limiter = rate_limiter
+    _audit_logger = audit_logger
     return router
+
+
+async def _audit(
+    event_type: str,
+    *,
+    actor_id: str,
+    session_id: str,
+    detail: dict,
+) -> None:
+    """Emit an audit row, never letting an audit failure break the command."""
+    if _audit_logger is None:
+        return
+    try:
+        await _audit_logger.log(
+            event_type,
+            actor_id=actor_id,
+            session_id=session_id,
+            detail=detail,
+        )
+    except Exception as e:  # pragma: no cover - defensive
+        log.warning("command_audit_failed", error=str(e), event_type=event_type)
+
+
+def _redacted_arg_summary(action: str, args: dict) -> dict:
+    """Build a redaction-safe summary of command args for the audit trail.
+
+    NEVER store evaluate JS source, fill values, or cookie/network payloads.
+    For navigate we keep only the URL host; for everything else we keep just
+    the argument key names (never their values).
+    """
+    if action == "navigate":
+        url = args.get("url", "") if isinstance(args, dict) else ""
+        try:
+            host = urlparse(url).hostname
+        except Exception:
+            host = None
+        return {"host": host}
+    keys = sorted(args.keys()) if isinstance(args, dict) else []
+    return {"arg_keys": keys}
 
 
 class CommandRequest(BaseModel):
@@ -101,10 +142,14 @@ async def execute_command(
             )
         device_id = online[0]
     else:
-        if not _connection_manager.is_connected(device_id):
+        # Explicit device_id: verify ownership before doing anything else.
+        # get()+owner supersedes the bare is_connected() check (AUTHZ-1: IDOR).
+        # Return 404 (not 403) so a caller can't probe which device_ids exist.
+        conn = _connection_manager.get(device_id)
+        if conn is None or conn.user_id != auth.user_id:
             raise HTTPException(
-                status_code=502,
-                detail={"error": "Device not connected", "code": "DEVICE_OFFLINE"},
+                status_code=404,
+                detail={"error": "Device not found", "code": "DEVICE_NOT_FOUND"},
             )
 
     # --- Pause gate ---
@@ -134,6 +179,16 @@ async def execute_command(
             headers={"Retry-After": str(int(e.retry_after_s))},
         )
 
+    arg_summary = _redacted_arg_summary(req.action, req.args)
+
+    def _denied_detail(outcome: str) -> dict:
+        return {
+            "device_id": device_id,
+            "action": req.action,
+            "outcome": outcome,
+            "args": arg_summary,
+        }
+
     try:
         # --- Security gates ---
         if req.action == "evaluate":
@@ -143,6 +198,12 @@ async def execute_command(
             try:
                 await assert_evaluate_allowed(_db, auth.user_id, None)
             except EvaluateNotAllowed as e:
+                await _audit(
+                    "command_denied",
+                    actor_id=auth.user_id,
+                    session_id=req.session,
+                    detail=_denied_detail("evaluate_not_allowed"),
+                )
                 raise HTTPException(
                     status_code=403,
                     detail={"error": e.reason, "code": "EVALUATE_NOT_ALLOWED"},
@@ -153,12 +214,25 @@ async def execute_command(
             try:
                 parsed = urlparse(url)
             except Exception:
+                await _audit(
+                    "command_denied",
+                    actor_id=auth.user_id,
+                    session_id=req.session,
+                    detail=_denied_detail("invalid_url"),
+                )
                 raise HTTPException(
                     status_code=400,
                     detail={"error": "Invalid URL", "code": "INVALID_URL"},
                 )
             scheme = (parsed.scheme or "").lower()
-            if scheme in _FORBIDDEN_SCHEMES:
+            # Allowlist (CMD-2): only http/https; everything else is rejected.
+            if scheme not in {"http", "https"}:
+                await _audit(
+                    "command_denied",
+                    actor_id=auth.user_id,
+                    session_id=req.session,
+                    detail=_denied_detail("scheme_not_allowed"),
+                )
                 raise HTTPException(
                     status_code=400,
                     detail={
@@ -171,6 +245,12 @@ async def execute_command(
             try:
                 await assert_network_allowed(_db, auth.user_id)
             except NetworkNotAllowed as e:
+                await _audit(
+                    "command_denied",
+                    actor_id=auth.user_id,
+                    session_id=req.session,
+                    detail=_denied_detail("network_not_allowed"),
+                )
                 raise HTTPException(
                     status_code=403,
                     detail={"error": e.reason, "code": "NETWORK_NOT_ALLOWED"},
@@ -180,6 +260,12 @@ async def execute_command(
             files = req.args.get("files", [])
             total_size = sum(len(f.get("data", "")) for f in files if isinstance(f, dict))
             if total_size > 5 * 1024 * 1024:
+                await _audit(
+                    "command_denied",
+                    actor_id=auth.user_id,
+                    session_id=req.session,
+                    detail=_denied_detail("upload_too_large"),
+                )
                 raise HTTPException(
                     status_code=400,
                     detail={"error": "Upload exceeds 5MB limit", "code": "UPLOAD_TOO_LARGE"},
@@ -196,16 +282,49 @@ async def execute_command(
         timeout = _ACTION_TIMEOUTS.get(req.action, _DEFAULT_TIMEOUT)
 
         result = await _connection_manager.send_and_wait(device_id, msg, timeout)
+        await _audit(
+            "command_executed",
+            actor_id=auth.user_id,
+            session_id=req.session,
+            detail={
+                "device_id": device_id,
+                "action": req.action,
+                "outcome": "ok",
+                "args": arg_summary,
+            },
+        )
         return {"result": result}
 
     except HTTPException:
         raise
     except asyncio.TimeoutError:
+        await _audit(
+            "command_timeout",
+            actor_id=auth.user_id,
+            session_id=req.session,
+            detail={
+                "device_id": device_id,
+                "action": req.action,
+                "outcome": "timeout",
+                "args": arg_summary,
+            },
+        )
         raise HTTPException(
             status_code=504,
             detail={"error": "Command timed out", "code": "TIMEOUT"},
         )
     except (DeviceOfflineError, CommandError) as e:
+        await _audit(
+            "command_failed",
+            actor_id=auth.user_id,
+            session_id=req.session,
+            detail={
+                "device_id": device_id,
+                "action": req.action,
+                "outcome": "command_error" if isinstance(e, CommandError) else "offline",
+                "args": arg_summary,
+            },
+        )
         if isinstance(e, CommandError):
             raise HTTPException(
                 status_code=500,
@@ -219,6 +338,17 @@ async def execute_command(
             detail={"error": "Device not connected", "code": "DEVICE_OFFLINE"},
         )
     except Exception as e:
+        await _audit(
+            "command_failed",
+            actor_id=auth.user_id,
+            session_id=req.session,
+            detail={
+                "device_id": device_id,
+                "action": req.action,
+                "outcome": "error",
+                "args": arg_summary,
+            },
+        )
         log.error("command_unexpected_error", error=str(e), action=req.action)
         raise HTTPException(
             status_code=500,

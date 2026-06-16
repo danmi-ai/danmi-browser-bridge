@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE TABLE IF NOT EXISTS pairing_codes (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL REFERENCES users(id),
-    code TEXT NOT NULL UNIQUE,
+    code_hash TEXT NOT NULL UNIQUE,
     expires_at TEXT NOT NULL,
     used INTEGER NOT NULL DEFAULT 0,
     used_by_device_id TEXT,
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_commands_session_id ON commands(session_id);
 CREATE INDEX IF NOT EXISTS idx_commands_status ON commands(status);
 CREATE INDEX IF NOT EXISTS idx_audit_log_event_type ON audit_log(event_type);
 CREATE INDEX IF NOT EXISTS idx_audit_log_created_at ON audit_log(created_at);
-CREATE INDEX IF NOT EXISTS idx_pairing_codes_code ON pairing_codes(code);
+CREATE INDEX IF NOT EXISTS idx_pairing_codes_code ON pairing_codes(code_hash);
 CREATE INDEX IF NOT EXISTS idx_pairing_codes_expires_at ON pairing_codes(expires_at);
 CREATE INDEX IF NOT EXISTS idx_audit_sessions_user_id ON audit_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_sessions_expires_at ON audit_sessions(expires_at);

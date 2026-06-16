@@ -4,21 +4,26 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from server.auth.dependencies import require_any_auth
 from server.auth.validator import AuthInfo
 from server.storage.database import Database
+from server.ws.connection_manager import ConnectionManager
 
 router = APIRouter()
 
 _db: Database | None = None
+_connection_manager: ConnectionManager | None = None
 
 
-def init_devices_router(db: Database) -> APIRouter:
-    global _db
+def init_devices_router(
+    db: Database, connection_manager: ConnectionManager | None = None
+) -> APIRouter:
+    global _db, _connection_manager
     _db = db
+    _connection_manager = connection_manager
     return router
 
 
@@ -73,7 +78,6 @@ async def revoke_device(device_id: str, auth: AuthInfo = Depends(require_any_aut
         (device_id,),
     )
     if row is None or row["user_id"] != auth.user_id:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Device not found")
     if not row["is_active"]:
         return {"ok": True, "already_revoked": True}
@@ -81,4 +85,9 @@ async def revoke_device(device_id: str, auth: AuthInfo = Depends(require_any_aut
         "UPDATE devices SET is_active = 0, updated_at = datetime('now') WHERE id = ?",
         (device_id,),
     )
+    # Drop the live socket too (mirror admin revoke path) — flipping is_active=0
+    # alone leaves an already-connected device able to keep serving commands
+    # until the periodic revocation watcher catches up (AUTHZ-4).
+    if _connection_manager:
+        await _connection_manager.revoke(device_id)
     return {"ok": True, "revoked_device_id": device_id}

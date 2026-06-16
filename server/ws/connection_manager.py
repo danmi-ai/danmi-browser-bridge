@@ -45,7 +45,11 @@ class ConnectionManager:
     def __init__(self):
         self._connections: dict[str, DeviceConnection] = {}
         self._lock = asyncio.Lock()
-        self._pending_commands: dict[int, asyncio.Future] = {}
+        # msg_id -> (owning device_id, future). The device_id binding prevents
+        # a malicious device from resolving another device's pending command
+        # (result-forgery): resolve_command only fires if the resolving socket's
+        # own device_id matches the owner stored here.
+        self._pending_commands: dict[int, tuple[str, asyncio.Future]] = {}
         self._next_msg_id: int = 1
 
     async def connect(
@@ -69,10 +73,20 @@ class ConnectionManager:
             self._connections[device_id] = conn
             return conn
 
-    async def disconnect(self, device_id: str) -> None:
-        """Remove a device connection."""
+    async def disconnect(
+        self, device_id: str, conn: DeviceConnection | None = None
+    ) -> None:
+        """Remove a device connection.
+
+        Identity-aware: when ``conn`` is provided, only pop if the currently
+        stored connection *is* that object (compare-and-delete). This prevents
+        a stale handler's teardown from evicting a NEWER connection that a
+        reconnect already installed under the same device_id. When ``conn`` is
+        None, pop unconditionally by key.
+        """
         async with self._lock:
-            self._connections.pop(device_id, None)
+            if conn is None or self._connections.get(device_id) is conn:
+                self._connections.pop(device_id, None)
 
     def get(self, device_id: str) -> DeviceConnection | None:
         """Get connection for a device, or None if not connected."""
@@ -166,7 +180,7 @@ class ConnectionManager:
         msg["msg_id"] = msg_id
 
         future: asyncio.Future = asyncio.get_event_loop().create_future()
-        self._pending_commands[msg_id] = future
+        self._pending_commands[msg_id] = (device_id, future)
 
         try:
             await conn.websocket.send_text(json.dumps(msg))
@@ -179,13 +193,20 @@ class ConnectionManager:
 
         return result.get("data", result)
 
-    def resolve_command(self, msg_id: int, response: dict) -> bool:
+    def resolve_command(self, device_id: str, msg_id: int, response: dict) -> bool:
         """Resolve a pending command future with the given response.
+
+        The resolving ``device_id`` must own the pending command — otherwise a
+        malicious device could forge results for another device's command. Only
+        resolves if the stored owner matches the resolving device.
 
         Returns True if a pending future was resolved, False otherwise.
         """
-        future = self._pending_commands.get(msg_id)
-        if future and not future.done():
-            future.set_result(response)
-            return True
-        return False
+        entry = self._pending_commands.get(msg_id)
+        if entry is None:
+            return False
+        owner_id, future = entry
+        if owner_id != device_id or future.done():
+            return False
+        future.set_result(response)
+        return True

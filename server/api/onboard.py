@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
-import random
 import secrets
 import string
 import uuid
@@ -14,6 +13,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
+from server.auth.tokens import hash_token
 from server.logging import get_logger
 from server.storage.database import Database
 
@@ -82,18 +82,21 @@ async def onboard_user(
         )
         log.info("user_created", username=username, user_id=user_id)
 
-    # Generate pairing code
-    code = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    # Generate pairing code (CSPRNG — PROV-5). Store only the hash (LOG-1); the
+    # plaintext is returned once to the caller and never persisted or logged.
+    alphabet = string.ascii_uppercase + string.digits
+    code = "".join(secrets.choice(alphabet) for _ in range(6))
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=30)
     expires_at_str = expires_at.isoformat()
     code_id = str(uuid.uuid4())
 
     await _db.execute(
-        "INSERT INTO pairing_codes (id, code, user_id, expires_at, used) VALUES (?, ?, ?, ?, 0)",
-        (code_id, code, user_id, expires_at_str),
+        "INSERT INTO pairing_codes (id, code_hash, user_id, expires_at, used) "
+        "VALUES (?, ?, ?, ?, 0)",
+        (code_id, hash_token(code), user_id, expires_at_str),
     )
 
-    log.info("onboard_complete", username=username, user_id=user_id, code=code)
+    log.info("onboard_complete", username=username, user_id=user_id, code_id=code_id)
 
     # Derive server_url from the request (or BB_PUBLIC_URL behind a proxy) so we
     # never hard-code an IP — a relocated deployment keeps working untouched.

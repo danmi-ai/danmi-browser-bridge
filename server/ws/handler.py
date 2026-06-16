@@ -193,9 +193,11 @@ async def device_ws(websocket: WebSocket, token: str | None = Query(default=None
 
             msg_type = msg.get("type")
 
-            # Route command responses to pending futures first.
+            # Route command responses to pending futures first. Pass the
+            # authenticated socket's own device_id so a device can only resolve
+            # commands it actually owns (no cross-device result-forgery).
             if msg_type in ("result", "error") and "msg_id" in msg:
-                _manager.resolve_command(msg["msg_id"], msg)
+                _manager.resolve_command(conn.device_id, msg["msg_id"], msg)
                 continue
 
             if msg_type == "pong":
@@ -219,7 +221,7 @@ async def device_ws(websocket: WebSocket, token: str | None = Query(default=None
         log.warning("ws_unexpected_error", device_id=conn.device_id, error=str(e))
     finally:
         heartbeat_task.cancel()
-        await _manager.disconnect(conn.device_id)
+        await _manager.disconnect(conn.device_id, conn)
         log.info("device_disconnected", device_id=conn.device_id)
 
 

@@ -96,7 +96,7 @@ def create_app(
     pairing_router = init_pairing_router(db, audit_logger)
     app.include_router(pairing_router, prefix="/api/v1")
 
-    devices_router = init_devices_router(db)
+    devices_router = init_devices_router(db, connection_manager)
     app.include_router(devices_router, prefix="/api/v1")
 
     ws_router = init_ws_router(db, config, connection_manager, audit_logger)
@@ -120,7 +120,7 @@ def create_app(
     popup_config_router = init_popup_config_router()
     app.include_router(popup_config_router, prefix="/api/v1")
 
-    command_router = init_command_router(db, connection_manager, rate_limiter)
+    command_router = init_command_router(db, connection_manager, rate_limiter, audit_logger)
     app.include_router(command_router, prefix="/api/v1")
 
     # admin token lives next to the DB so dev/prod naturally diverge.

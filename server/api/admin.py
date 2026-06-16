@@ -284,7 +284,7 @@ async def admin_get_user(
         (user_id,),
     )
     codes = await _db.fetchall(
-        "SELECT code, expires_at, used FROM pairing_codes "
+        "SELECT id, expires_at, used FROM pairing_codes "
         "WHERE user_id = ? AND used = 0 AND expires_at > datetime('now')",
         (user_id,),
     )

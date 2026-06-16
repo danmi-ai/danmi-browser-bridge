@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncIterator
@@ -32,6 +33,16 @@ class Database:
             conn.row_factory = aiosqlite.Row
             self._all_conns.append(conn)
             await self._pool.put(conn)
+
+        # FS-1: lock down DB file/dir perms on shared hosts. SQLite creates
+        # the DB world-readable by default. Skip for in-memory / non-file DBs.
+        if str(self._db_path) != ":memory:" and self._db_path.is_file():
+            try:
+                os.chmod(self._db_path, 0o600)
+                os.chmod(self._db_path.parent, 0o700)
+            except OSError:
+                # Best-effort; don't block startup if the FS rejects it.
+                pass
 
         self._initialized = True
 

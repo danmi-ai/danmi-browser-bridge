@@ -81,3 +81,37 @@ async def apply_migrations(db: Database) -> None:
         await db.execute(
             "ALTER TABLE users ADD COLUMN network_enabled INTEGER NOT NULL DEFAULT 0"
         )
+
+    # LOG-1: pairing codes are stored hashed (code_hash), never as plaintext.
+    # SQLite can't cheaply drop the old NOT NULL/UNIQUE `code` column, and pairing
+    # rows are ephemeral (<=30min TTL), so when the legacy `code` column is present
+    # and `code_hash` is absent we REBUILD the table from the new schema. This drops
+    # any in-flight codes — acceptable per product decision since they expire within
+    # 30 minutes and users can simply request a fresh code. Guarded by column checks
+    # so it runs exactly once; fresh DBs already have code_hash (via schema.sql) and
+    # never enter this branch.
+    if await _column_exists(db, "pairing_codes", "code") and not await _column_exists(
+        db, "pairing_codes", "code_hash"
+    ):
+        async with db.transaction() as conn:
+            await conn.execute("DROP TABLE pairing_codes")
+            await conn.execute(
+                """
+                CREATE TABLE pairing_codes (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL REFERENCES users(id),
+                    code_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    used INTEGER NOT NULL DEFAULT 0,
+                    used_by_device_id TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+                """
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pairing_codes_code ON pairing_codes(code_hash)"
+            )
+            await conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_pairing_codes_expires_at "
+                "ON pairing_codes(expires_at)"
+            )

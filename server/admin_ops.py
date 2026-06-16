@@ -35,13 +35,16 @@ async def create_pairing_code(
     expiry_seconds = config.pairing.code_expiry
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=expiry_seconds)
     pairing_id = str(uuid.uuid4())
+    # LOG-1: store only the hash; the plaintext is returned once to the caller.
     await db.execute(
-        "INSERT INTO pairing_codes (id, user_id, code, expires_at) VALUES (?, ?, ?, ?)",
-        (pairing_id, user_id, code, expires_at.isoformat()),
+        "INSERT INTO pairing_codes (id, user_id, code_hash, expires_at) VALUES (?, ?, ?, ?)",
+        (pairing_id, user_id, hash_token(code), expires_at.isoformat()),
     )
     if audit:
         await audit.log(
-            "pairing_code_created", actor_id="admin", detail={"user_id": user_id, "code": code}
+            "pairing_code_created",
+            actor_id="admin",
+            detail={"user_id": user_id, "code_id": pairing_id},
         )
     return {"code": code, "expires_at": expires_at.isoformat(), "ttl_seconds": expiry_seconds}
 
