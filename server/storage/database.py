@@ -30,6 +30,10 @@ class Database:
             await conn.execute("PRAGMA journal_mode=WAL")
             await conn.execute("PRAGMA wal_autocheckpoint=1000")
             await conn.execute("PRAGMA foreign_keys=ON")
+            # PROV-1: a concurrent write loser WAITs briefly instead of raising
+            # SQLITE_BUSY immediately, so the losing pairing-redeem surfaces a
+            # clean generic 400 rather than an OperationalError.
+            await conn.execute("PRAGMA busy_timeout=5000")
             conn.row_factory = aiosqlite.Row
             self._all_conns.append(conn)
             await self._pool.put(conn)
