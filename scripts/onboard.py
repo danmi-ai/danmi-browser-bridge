@@ -46,7 +46,7 @@ if BB_ENV == "dev":
 else:
     DB_FILE = ROOT / "data" / "browser_bridge.db"
     USER_TOKENS_DIR = ROOT / "data" / "users"
-    SERVER_URL = os.environ.get("BB_SERVER_URL", "http://127.0.0.1:8403")
+    SERVER_URL = os.environ.get("BB_SERVER_URL", "http://127.0.0.1:8404")
 
 EXTENSION_DIR = ROOT / "extension"
 # Server CLI must be invoked with the python that has its deps installed.

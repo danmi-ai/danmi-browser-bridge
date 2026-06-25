@@ -613,8 +613,8 @@ def main() -> None:
     p.add_argument("device_id", help="Device id (uuid)")
     p.add_argument(
         "--server",
-        default="http://127.0.0.1:8403",
-        help="Live server URL (default: http://127.0.0.1:8403).",
+        default="http://127.0.0.1:8404",
+        help="Live server URL (default: http://127.0.0.1:8404).",
     )
 
     args = parser.parse_args()

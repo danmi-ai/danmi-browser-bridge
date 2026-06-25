@@ -70,7 +70,7 @@ Run: `curl -s $BB_SERVER/api/v1/health`
 
 | Symptom | Likely cause | Action |
 |---|---|---|
-| `start` fails: "address already in use" | Stale process on `:8403` | `$PY $CTL stop`, then `start`; if stop fails, `lsof -i :8403` to find the conflicting PID |
+| `start` fails: "address already in use" | Stale process on `:8404` | `$PY $CTL stop`, then `start`; if stop fails, `lsof -i :8404` to find the conflicting PID |
 | Tool calls time out | Page slow, JS-heavy, or network blocked in browser | `$PY $CTL logs 100` for `[error]` / `panic`; if recent, `restart`. Otherwise the page itself is the problem — try a shorter operation |
 | `connected_devices` drops to 0 mid-task | User's WS dropped (Mac sleep, VPN switch) | Wait 5–10s for auto-reconnect. If not back, ask user to check the popup / reload the extension |
 | Yellow "debugging" bar stuck in user's Chrome | `network start` left dangling | Send `network stop` (in any session that's still authoritative) |

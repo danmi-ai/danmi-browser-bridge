@@ -5,7 +5,7 @@
 > **AI Agent 用法看 [`skill/SKILL.md`](./skill/SKILL.md)** — 包含健康检查、用户识别、调用范式、tools 表。出错或新用户接入时，Agent 会被引导到 `skill/references/onboard.md`、`operations.md`、`tips.md`。本 README 是给开发者读的项目说明。
 
 ```
-[ Agent / Python SDK ] ──HTTP──▶ [ Bridge Server :8403 ] ──WSS──▶ [ Chrome Extension ]
+[ Agent / Python SDK ] ──HTTP──▶ [ Bridge Server :8404 ] ──WSS──▶ [ Chrome Extension ]
                                         │
                                     [ SQLite ]
 ```
@@ -45,14 +45,14 @@
 ### 1. Server 启动
 
 ```bash
-python3 scripts/ctl.py start    # nohup uvicorn, port 8403
+python3 scripts/ctl.py start    # nohup uvicorn, port 8404
 python3 scripts/ctl.py status   # 检查健康
 ```
 
 ### 2. 创建用户 + 配对码
 
 ```bash
-curl -s -X POST "http://<server_ip>:8403/api/v1/onboard/<username>" \
+curl -s -X POST "http://<server_ip>:8404/api/v1/onboard/<username>" \
   -H "Authorization: Bearer $(cat data/.admin_token)"
 # 返回 { server_url, pairing_code, user_id }
 ```
@@ -95,7 +95,7 @@ client.close()
 ```toml
 [server]
 host = "0.0.0.0"
-port = 8403
+port = 8404
 version = "0.8.0"
 
 [server.timeouts]
@@ -149,7 +149,7 @@ server IP 可能漂移，因此用一个**固定 URL 的 JSON 清单**（`discov
 python3 scripts/ctl.py status|restart|logs
 # 用户/设备/会话/权限管理（更全，单一来源）
 (cd "$BB_HOME" && .venv/bin/python -m server.cli list-users|list-devices|list-sessions|show-user <u>|stats)
-curl -s http://<server_host>:8403/api/v1/health
+curl -s http://<server_host>:8404/api/v1/health
 ```
 
 ## License

@@ -52,7 +52,7 @@ def _default_server() -> str:
     try:
         return resolve_server("auto")
     except Exception:
-        return "http://127.0.0.1:8403"
+        return "http://127.0.0.1:8404"
 
 
 SERVER = _default_server()

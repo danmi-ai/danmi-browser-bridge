@@ -7,7 +7,7 @@ Example::
 
     from danmi_bridge.command_client import CommandClient
 
-    client = CommandClient("http://your-server:8403", token="bb_usr_...")
+    client = CommandClient("http://your-server:8404", token="bb_usr_...")
     tree = client.snapshot()
     client.click(ref=tree["tree"][0]["ref"])
     client.fill(ref="@e5", value="hello world")

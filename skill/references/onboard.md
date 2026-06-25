@@ -44,7 +44,7 @@ Response:
 
 ```json
 {
-  "server_url": "http://your-server:8403",
+  "server_url": "http://your-server:8404",
   "pairing_code": "A7K2Q9",
   "expires_at": "2026-06-05T14:30:00+00:00",
   "user_id": "..."

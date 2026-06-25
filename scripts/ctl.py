@@ -76,7 +76,7 @@ def _load_port_from_config(default: int) -> int:
     return int(raw.get("server", {}).get("port", default))
 
 
-PORT = _load_port_from_config(8413 if BB_ENV == "dev" else 8403)
+PORT = _load_port_from_config(8413 if BB_ENV == "dev" else 8404)
 HEALTH_URL = f"http://127.0.0.1:{PORT}/api/v1/health"
 
 # Per-env path suffix so dev/prod don't share PID / log / DB.
