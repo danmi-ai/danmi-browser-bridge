@@ -791,15 +791,15 @@
         </div></div></div>
       </div>
 
-      <!-- 步骤 3：找丹秘要配对码 + popup 标注 -->
+      <!-- 步骤 3：找 Agent 要配对码 + popup 标注 -->
       <div class="step">
         <button class="step-head" type="button">
           <span class="sn">3</span>
-          <h3>找丹秘要配对码，连接</h3>
+          <h3>找 Agent 要配对码，连接</h3>
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </button>
         <div class="step-body"><div class="inner"><div class="pad">
-          <p>@ 丹秘说一句「<b>连接我的浏览器，给我配对码</b>」，拿到 6 位码后点工具栏绿图标，填进弹窗：</p>
+          <p>跟你的 Agent 说一句「<b>连接我的浏览器，给我配对码</b>」，拿到 6 位码后点工具栏绿图标，填进弹窗：</p>
           <div class="pair-demo">
             <!-- 严格复用原型区「未配对」状态：结构/文案与 #pp-view-pairing 一致 -->
             <div class="popup" style="margin:0;">
@@ -820,8 +820,8 @@
             </div>
             <!-- 标注 -->
             <div class="annot">
-              <div class="annot-row"><span class="annot-num">1</span><div class="t"><b>服务器地址</b><span>已自动获取，无需手填</span></div></div>
-              <div class="annot-row"><span class="annot-num">2</span><div class="t"><b>粘贴配对码</b><span>丹秘发的 6 位码，30 分钟内有效</span></div></div>
+              <div class="annot-row"><span class="annot-num">1</span><div class="t"><b>服务器地址</b><span>填你自托管的 server，如 http://your-host:8404</span></div></div>
+              <div class="annot-row"><span class="annot-num">2</span><div class="t"><b>粘贴配对码</b><span>Agent 发的 6 位码，30 分钟内有效</span></div></div>
               <div class="annot-row"><span class="annot-num">3</span><div class="t"><b>点「连接」</b><span>弹窗变绿即成功</span></div></div>
             </div>
           </div>
@@ -1139,7 +1139,7 @@
       </div>
       <div class="foot-links">
         <a href="#install">开始装机</a>
-        <a href="https://console.cloud.baidu-int.com/devops/icode/repos/baidu/personal-code/danmi-broswer-bridge/tree/master" target="_blank" rel="noopener">iCode 仓库</a>
+        <a href="https://github.com/danmi-ai/danmi-browser-bridge" target="_blank" rel="noopener">GitHub 仓库</a>
       </div>
     </div>
     <div class="foot-bottom">
@@ -1163,50 +1163,16 @@
     btn.addEventListener('click', () => { cur = order[cur]; localStorage.setItem(KEY, cur); apply(cur); });
   })();
 
-  // —— 装机命令：开源版从 GitHub 安装；discovery 开源版不用（自托管在弹窗手填 server）。
-  //    （internal 发布脚本会把这些 GitHub 地址替换成 BOS 地址。）——
-  const BB_DISCOVERY = '';
+  // —— 装机命令（开源版从 GitHub 安装；server 地址在扩展弹窗里手填）——
   const BB_INSTALL_CMD = 'curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash';
 
   (function setInstallCmd() {
     const s1 = document.getElementById('step1cmd'); if (s1) s1.textContent = BB_INSTALL_CMD;
+    const ppUpd = document.getElementById('pp-upd-cmd'); if (ppUpd) ppUpd.textContent = BB_INSTALL_CMD;
     window.__installCmd = BB_INSTALL_CMD;
   })();
-
-  // —— popup 仿真里展示的 server 地址：优先 location.origin，脱离 server 打开
-  //    时异步从 BOS 锚点拿当前地址（仅用于展示，不影响装机命令）——
-  function applyServerDisplay(base) {
-    const hostOnly = base.replace(/^https?:\/\//, '');
-    const pp = document.getElementById('ppServer'); if (pp) pp.textContent = hostOnly;
-    const ppPair = document.getElementById('pp-pair-server'); if (ppPair) ppPair.value = base;
-    const ppUpd = document.getElementById('pp-upd-cmd'); if (ppUpd) ppUpd.textContent = BB_INSTALL_CMD;
-    const demo = document.getElementById('step3-server'); if (demo) demo.value = base;
-  }
-
-  (function () {
-    let base = null;
-    try {
-      const o = location.origin;
-      // 仅当由真实 server 托管时用 origin（占位 host 与本地除外）
-      if (o && o.startsWith('http') && !o.includes('example.com')) base = o.replace(/\/static\/?$/, '');
-    } catch (_) {}
-    if (base) { applyServerDisplay(base); return; }
-    if (!BB_DISCOVERY) return;  // 开源版无中心 discovery — popup 手填 server
-    fetch(BB_DISCOVERY + '?t=' + Date.now(), { cache: 'no-store' })
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d && d.server_url) applyServerDisplay(d.server_url.replace(/\/$/, '')); })
-      .catch(() => {});
-  })();
-
-  // —— footer 版本号：从 discovery 锚点读 server_version（开源版无 discovery 则跳过）——
-  if (BB_DISCOVERY) fetch(BB_DISCOVERY + '?t=' + Date.now(), { cache: 'no-store' })
-    .then(r => r.ok ? r.json() : null)
-    .then(d => {
-      const v = d && (d.server_version || (d.extension && d.extension.current_version));
-      const el = document.getElementById('foot-ver');
-      if (v && el) el.textContent = '· v' + v;
-    })
-    .catch(() => {});
+  // 开源版无中心服务发现：popup 仿真里的 server 地址用静态占位
+  // （http://your-server:8404），不做任何自动探测——用户在扩展弹窗手填自己的 server。
 
   // —— popup 原型状态机：切换标签驱动弹窗各状态 ——
   (function () {
