@@ -60,9 +60,8 @@ curl -s -X POST "http://<server_ip>:8404/api/v1/onboard/<username>" \
 ### 3. Mac 端安装 Extension
 
 ```bash
-# 安装命令与 server IP 解耦：脚本运行时从服务发现锚点（discovery.json）拿 server 地址。
-# <YOUR_INSTALL_URL> 是你发布的 install.sh 地址（对象存储 / CDN / server /static 皆可）。
-curl -sL <YOUR_INSTALL_URL> | bash
+# 从 GitHub Release 下载扩展并引导加载；自托管的 server 地址在扩展弹窗里手填。
+curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash
 ```
 
 然后 chrome://extensions → Load unpacked → 弹窗里服务器地址已自动获取，只需填 Pairing Code → 连接。

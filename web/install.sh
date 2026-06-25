@@ -3,17 +3,15 @@ set -euo pipefail
 
 # 丹秘 Browser Bridge 扩展安装脚本（Mac）
 #
-# 本脚本与服务器地址解耦：扩展包从固定的分发地址下载，服务器地址在运行时
-# 从服务发现清单（discovery.json）实时读取。因此无论 server 换 IP 还是临时
-# 离线，这条安装命令都有效。
+# 从 GitHub Release 下载扩展包并引导加载。自托管的 server 地址在扩展弹窗里手填
+# （开源版没有中心服务发现）。可用 env 覆盖下载地址 / 可选的服务发现锚点：
+#   BB_EXT_ZIP_URL   扩展 zip 地址（默认 GitHub Release latest）
+#   BB_DISCOVERY_URL 可选：你自建的 discovery.json，用于自动填 server 地址
 #
-# DISCOVERY / ZIP_URL 是占位符，发布时由 internal 发布脚本替换为真实分发地址；
-# 自托管可直接改这两行或用 env（BB_DISCOVERY_URL / BB_EXT_ZIP_URL）覆盖。
-#
-#   curl -sL <YOUR_INSTALL_URL> | bash
+#   curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash
 
-DISCOVERY="${BB_DISCOVERY_URL:-__BB_DISCOVERY_URL__}"
-ZIP_URL="${BB_EXT_ZIP_URL:-__BB_EXT_ZIP_URL__}"
+DISCOVERY="${BB_DISCOVERY_URL:-}"
+ZIP_URL="${BB_EXT_ZIP_URL:-https://github.com/danmi-ai/danmi-browser-bridge/releases/latest/download/danmi-browser-bridge-extension.zip}"
 EXT_DIR="$HOME/Downloads/danmi-browser-bridge-extension"
 
 GREEN='\033[0;32m'
@@ -54,12 +52,13 @@ if [[ ! -f "$EXT_DIR/manifest.json" ]]; then
 fi
 echo -e "${GREEN}已下载到：${RESET}$EXT_DIR"
 echo ""
-# —— 3. 运行时从服务发现清单读取当前 server 地址 ——
+# —— 3. 可选：从服务发现锚点读 server 地址（自托管一般没有，跳过即可）——
 SERVER=""
-DISC=$(curl -sfL "${DISCOVERY}?t=$(cb)" 2>/dev/null || true)
-if [[ -n "$DISC" ]]; then
-  # 不依赖 jq：用 grep/sed 提取 "server_url": "..."
-  SERVER=$(printf '%s' "$DISC" | sed -n 's/.*"server_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+if [[ -n "$DISCOVERY" ]]; then
+  DISC=$(curl -sfL "${DISCOVERY}?t=$(cb)" 2>/dev/null || true)
+  if [[ -n "$DISC" ]]; then
+    SERVER=$(printf '%s' "$DISC" | sed -n 's/.*"server_url"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
+  fi
 fi
 
 # —— 4. 打开 Chrome 扩展页 ——
@@ -81,7 +80,7 @@ if [[ -n "$SERVER" ]]; then
   echo -e "     服务器地址已自动获取：${YELLOW}${SERVER}${RESET}"
   echo -e "     ${DIM}（扩展弹窗会自动填好，一般无需手动输入）${RESET}"
 else
-  echo -e "     ${DIM}（服务器地址扩展弹窗会自动获取；如未填，向丹秘索取）${RESET}"
+  echo -e "     在弹窗的 ${BOLD}服务器地址${RESET} 里填你自托管的 server（如 ${YELLOW}http://your-host:8404${RESET}）"
 fi
 echo ""
 echo -e "${BOLD}完成！${RESET}加载后弹窗显示绿色即表示连接成功。"

@@ -1163,10 +1163,10 @@
     btn.addEventListener('click', () => { cur = order[cur]; localStorage.setItem(KEY, cur); apply(cur); });
   })();
 
-  // —— 装机命令：发布时由 internal 发布脚本替换占位符为真实地址；
-  //    与 server IP 解耦，永久有效。开源默认占位，自托管时改这两行或走发布替换。——
-  const BB_DISCOVERY = '__BB_DISCOVERY_URL__';
-  const BB_INSTALL_CMD = 'curl -sL __BB_INSTALL_URL__ | bash';
+  // —— 装机命令：开源版从 GitHub 安装；discovery 开源版不用（自托管在弹窗手填 server）。
+  //    （internal 发布脚本会把这些 GitHub 地址替换成 BOS 地址。）——
+  const BB_DISCOVERY = '';
+  const BB_INSTALL_CMD = 'curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash';
 
   (function setInstallCmd() {
     const s1 = document.getElementById('step1cmd'); if (s1) s1.textContent = BB_INSTALL_CMD;
@@ -1191,14 +1191,15 @@
       if (o && o.startsWith('http') && !o.includes('example.com')) base = o.replace(/\/static\/?$/, '');
     } catch (_) {}
     if (base) { applyServerDisplay(base); return; }
+    if (!BB_DISCOVERY) return;  // 开源版无中心 discovery — popup 手填 server
     fetch(BB_DISCOVERY + '?t=' + Date.now(), { cache: 'no-store' })
       .then(r => r.ok ? r.json() : null)
       .then(d => { if (d && d.server_url) applyServerDisplay(d.server_url.replace(/\/$/, '')); })
       .catch(() => {});
   })();
 
-  // —— footer 版本号：始终从 discovery 锚点读 server_version ——
-  fetch(BB_DISCOVERY + '?t=' + Date.now(), { cache: 'no-store' })
+  // —— footer 版本号：从 discovery 锚点读 server_version（开源版无 discovery 则跳过）——
+  if (BB_DISCOVERY) fetch(BB_DISCOVERY + '?t=' + Date.now(), { cache: 'no-store' })
     .then(r => r.ok ? r.json() : null)
     .then(d => {
       const v = d && (d.server_version || (d.extension && d.extension.current_version));

@@ -77,7 +77,7 @@ Give the user this exact message — three steps, copy-paste friendly. Match the
 > **1. 安装扩展**（这条命令固定不变，服务器换地址也不影响）
 >
 > ```bash
-> curl -sL <YOUR_INSTALL_URL> | bash
+> curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash
 > ```
 >
 > 会下载扩展到 `~/Downloads/danmi-browser-bridge-extension/` 并自动打开 Chrome 的扩展页。
@@ -96,10 +96,9 @@ Give the user this exact message — three steps, copy-paste friendly. Match the
 >
 > 点连接，弹窗显示绿色圆点就成功了，告诉我一声。
 
-> The install command (`<YOUR_INSTALL_URL>`) and the server URL are both served
-> from a static host / auto-discovered, so they never change with the server IP.
-> Only the pairing code is per-user. The extension popup auto-fills the server
-> address from the discovery anchor — the user doesn't type it.
+> The install command pulls the extension from the GitHub Release. The server
+> URL is entered once in the extension popup (self-host has no central discovery).
+> Only the pairing code is per-user.
 
 ### A.4. Verify the pairing
 

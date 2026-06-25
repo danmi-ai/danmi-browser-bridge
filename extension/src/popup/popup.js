@@ -15,6 +15,7 @@ const BTN_TIPS = {
 
 // 读 BOS 锚点拿当前 server_url（带 cache-buster 防多日缓存）。失败返回 null。
 async function fetchDiscoveredServer() {
+  if (!DISCOVERY_URL) return null;  // discovery is optional (self-host: manual entry)
   try {
     const r = await fetch(DISCOVERY_URL + "?t=" + Date.now(), { cache: "no-store" });
     if (!r.ok) return null;

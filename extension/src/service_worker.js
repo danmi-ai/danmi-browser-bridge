@@ -275,8 +275,9 @@ class BridgeConnection {
     this.backoff = Math.min(this.backoff * BACKOFF_MULTIPLIER, BACKOFF_MAX);
   }
 
-  // 从 BOS 锚点查当前 server_url；变了就更新并落盘，下次 connect 用新地址。
+  // 从服务发现锚点查当前 server_url；变了就更新并落盘，下次 connect 用新地址。
   async _rediscoverServer() {
+    if (!DISCOVERY_URL) return;  // discovery is optional (self-host: manual entry)
     try {
       const r = await fetch(DISCOVERY_URL + "?t=" + Date.now(), { cache: "no-store" });
       if (!r.ok) return;

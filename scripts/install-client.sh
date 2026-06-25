@@ -17,8 +17,8 @@ fi
 # --- Config ---
 # Point these at your deployment. Override via env without editing the script.
 SERVER="${BB_SERVER:-http://127.0.0.1:8404}"
-# URL to the packaged extension zip (object storage / CDN / server /static).
-EXT_ZIP_URL="${BB_EXT_ZIP_URL:-${SERVER}/static/danmi-browser-bridge-extension.zip}"
+# URL to the packaged extension zip (default: GitHub Release latest).
+EXT_ZIP_URL="${BB_EXT_ZIP_URL:-https://github.com/danmi-ai/danmi-browser-bridge/releases/latest/download/danmi-browser-bridge-extension.zip}"
 BB_ADMIN_TOKEN="${BB_ADMIN_TOKEN:-}"
 
 if [[ -z "$BB_ADMIN_TOKEN" ]]; then
