@@ -1,0 +1,47 @@
+# Build the Chrome extension zip and (on a version tag) publish it as a
+# GitHub Release asset. Free on public repos (unlimited Actions minutes);
+# private repos use the monthly free-minutes quota.
+#
+# - Every run uploads a downloadable build artifact (Actions tab).
+# - Pushing a tag like `v0.8.5` also attaches the zip to a GitHub Release,
+#   giving the stable URL:
+#     https://github.com/<owner>/<repo>/releases/latest/download/danmi-browser-bridge-extension.zip
+#   (NOTE: that URL is only anonymously downloadable on a PUBLIC repo.)
+name: build-extension
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # needed to create/update Releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble extension config
+        # config.js is gitignored (holds deployment endpoints). For the public
+        # build we seed it from the committed template; self-hosters set their
+        # own DISCOVERY_URL/HOMEPAGE_URL, or just enter the server URL in the popup.
+        run: cp extension/src/config.example.js extension/src/config.js
+
+      - name: Build extension zip
+        # Keep the `extension/` prefix — install.sh flattens it on the client.
+        run: zip -r danmi-browser-bridge-extension.zip extension -x '*.DS_Store'
+
+      - name: Upload build artifact (every run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: danmi-browser-bridge-extension
+          path: danmi-browser-bridge-extension.zip
+          if-no-files-found: error
+
+      - name: Publish to Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: danmi-browser-bridge-extension.zip
