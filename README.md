@@ -45,17 +45,24 @@
 ### 1. Server 启动
 
 ```bash
-python3 scripts/ctl.py start    # nohup uvicorn, port 8404
-python3 scripts/ctl.py status   # 检查健康
+python3 -m venv .venv
+.venv/bin/pip install -e .                 # 安装 server + deps
+.venv/bin/python -m server.cli create-admin-token   # 一次性 admin token → data/.admin_token
+
+.venv/bin/python scripts/ctl.py start      # nohup uvicorn, port 8404
+.venv/bin/python scripts/ctl.py status     # 检查健康
 ```
 
 ### 2. 创建用户 + 配对码
 
 ```bash
-curl -s -X POST "http://<server_ip>:8404/api/v1/onboard/<username>" \
-  -H "Authorization: Bearer $(cat data/.admin_token)"
-# 返回 { server_url, pairing_code, user_id }
+PY=.venv/bin/python
+mkdir -p data/users
+$PY -m server.cli create-user me > data/users/me.token   # create-user 只打印 token，自己重定向落盘
+$PY -m server.cli create-pairing-code me                 # 打印 6 位配对码
 ```
+
+> 也可走 HTTP：`curl -s -X POST "http://127.0.0.1:8404/api/v1/onboard/<username>" -H "Authorization: Bearer $(cat data/.admin_token)"`。
 
 ### 3. Mac 端安装 Extension
 
@@ -86,6 +93,25 @@ pdf = client.save_as_pdf()         # 导出 PDF
 client.close_session()
 client.close()
 ```
+
+## Use with an AI agent (skill)
+
+The agent-facing instructions ship as a **skill** in [`skill/`](./skill/SKILL.md). The release workflow packages it into `danmi-browser-bridge.skill` and attaches it to each GitHub Release.
+
+**Easiest — tell your agent (Claude Code / Codex):**
+
+> 下载并安装这个 skill：https://github.com/danmi-ai/danmi-browser-bridge/releases/latest/download/danmi-browser-bridge.skill ，然后启动 danmi-browser-bridge 进行 onboard
+
+The agent installs the skill, then follows `skill/references/onboard.md` to clone+start the server (into `~/.danmi-browser-bridge`), mint your token, and hand you a pairing code.
+
+**Manual (Claude Code):**
+
+```bash
+curl -sL https://github.com/danmi-ai/danmi-browser-bridge/releases/latest/download/danmi-browser-bridge.skill \
+  -o /tmp/d.skill && unzip -o /tmp/d.skill -d ~/.claude/skills/ && rm /tmp/d.skill
+```
+
+Non-Claude agents can just read `skill/SKILL.md` directly — it's plain Markdown.
 
 ## 配置
 

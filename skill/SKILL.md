@@ -6,38 +6,45 @@ description: |
 
 # Danmi Browser Bridge
 
-Control the user's real Chrome (with their login sessions) via the remote Command API. The user's Mac runs a Chrome extension paired to the server; you call the server, the server forwards to the extension, the extension runs in the user's browser.
+Control the user's real Chrome (with their login sessions) via the Command API. The user's Mac runs a Chrome extension paired to a small bridge server; you call the server, the server forwards to the extension, the extension runs in the user's browser.
 
-Doc-relative paths (e.g. `references/...`) are relative to **this skill's directory**. Anything that touches the running deployment — the server code, `config.toml`, `data/`, `scripts/` — lives in the **deployment root**, which may be a different machine/path than the skill. Resolve it once into `$BB_HOME`:
+**This skill is written for single-user self-host** — one person runs the server on their own machine and pairs their own Chrome. That's the common case and the rest of this doc assumes it. Hosting for a team? See `references/multi-user.md`.
+
+Doc-relative paths (e.g. `references/...`) are relative to **this skill's directory**. Anything that touches the running deployment — the server code, `config.toml`, `data/`, `scripts/` — lives in the **deployment root**, resolved once into `$BB_HOME`:
 
 ```bash
-# Where the bridge server is deployed (has config.toml, server/, data/, scripts/).
-# Set BB_HOME in the environment; fall back to the repo root two levels up from
-# this skill (skill/ -> repo root) for the common co-located checkout.
-BB_HOME="${BB_HOME:-$(cd "$(dirname "$0")/.." 2>/dev/null && pwd)}"
+# Deployment root: holds config.toml, server/, data/, scripts/, .venv/.
+#   1. explicit BB_HOME env wins
+#   2. else, if you're already inside a checkout (server/ + config.toml in CWD), use it
+#   3. else, the default self-host location the onboard playbook clones into
+if [ -z "${BB_HOME:-}" ]; then
+  if [ -d ./server ] && [ -f ./config.toml ]; then BB_HOME="$(pwd)"; else BB_HOME="$HOME/.danmi-browser-bridge"; fi
+fi
 ```
-
-If you only have API access (no local deployment), you don't need `$BB_HOME` — set `$BB_SERVER` directly (below) and skip the server-management / onboarding commands, which require shell access to the deployment host.
 
 ## Server URL
 
-The server IP can move, so don't hard-code it. Resolve `$BB_SERVER` in this order:
+Single-user self-host runs the server locally, so `$BB_SERVER` defaults to loopback. The port comes from `config.toml` (`[server].port`, default `8404`):
 
 ```bash
-# 1. Prefer the live config on the deployment host
-BB_SERVER=$("$BB_HOME/.venv/bin/python" -c "import sys; sys.path.insert(0,'$BB_HOME'); from server.config import load_config, get_server_url; print(get_server_url(load_config('$BB_HOME/config.toml')))" 2>/dev/null)
-
-# 2. Fallback: a service-discovery anchor (a static discovery.json that always
-#    points at the current server). Set BB_DISCOVERY_URL to your hosted anchor.
-[ -z "$BB_SERVER" ] && [ -n "$BB_DISCOVERY_URL" ] && \
-  BB_SERVER=$(curl -s "$BB_DISCOVERY_URL?t=$(date +%s)" | python3 -c "import sys,json;print(json.load(sys.stdin)['server_url'])")
+PORT=$("$BB_HOME/.venv/bin/python" -c "import sys;sys.path.insert(0,'$BB_HOME');from server.config import load_config;print(load_config('$BB_HOME/config.toml').server.port)" 2>/dev/null || echo 8404)
+BB_SERVER="${BB_SERVER:-http://127.0.0.1:$PORT}"
 ```
 
-Every example below assumes `$BB_SERVER` is set. If you already know the deployment URL, just `export BB_SERVER=http://<host>:<port>` instead.
+If the server is somewhere else (a remote box, a reverse proxy), just `export BB_SERVER=http://<host>:<port>` and skip the server-management commands — those need shell access to the deployment host.
 
-### Public landing page (for users)
+## Step 0 — First run (is the bridge even set up here?)
 
-When a user asks "how do I install / where's the homepage", send them your deployment's landing page URL (the static `index.html` you publish). It auto-discovers the current server address (from the discovery anchor) and gives a fixed one-line install command, so it works even if the server's IP changed. Full onboarding flow is in `references/onboard.md`.
+Before anything else, check whether the bridge has been onboarded on this machine:
+
+```bash
+curl -s $BB_SERVER/api/v1/health        # connection refused = no server running
+ls "$BB_HOME"/data/users/*.token 2>/dev/null   # no match = no user token yet
+```
+
+If the server is **unreachable** (nothing listening) **or** there's **no user token** → the bridge hasn't been set up here yet. **Read `references/onboard.md`** — it clones + starts the server, mints your token and a pairing code, and walks the user through pairing their Chrome. Come back to Step 1 once `/api/v1/health` answers.
+
+If health already returns `status:"ok"`, skip to Step 1.
 
 ## Step 1 — Health check (always first)
 
@@ -47,42 +54,24 @@ curl -s $BB_SERVER/api/v1/health
 
 Then act on the result:
 
-- **`status:"ok"` and `connected_devices >= 1`** — server is up and at least one device is online. Continue to Step 2.
-- **`status:"ok"` and `connected_devices: 0`** — server is up but no Mac is paired. **Read `references/onboard.md`** to onboard or re-pair the user.
-- **server unreachable / non-200** — server is down. **Read `references/operations.md`** for restart/diagnose.
+- **`status:"ok"` and `connected_devices >= 1`** — server is up and the user's Chrome is online. Continue to Step 2.
+- **`status:"ok"` and `connected_devices: 0`** — server is up but no Chrome is paired. **Read `references/onboard.md`** to pair (or re-pair) the user's browser.
+- **server unreachable / non-200** — server is down or not installed. **Read `references/onboard.md`** (first run) or **`references/operations.md`** (restart/diagnose an existing install).
 
 Don't guess fixes here — every non-healthy state is handled in those references.
 
-## Step 2 — Identify which user you're acting for
+## Step 2 — Your token
 
-### 🔴 安全铁律：只能控制发起人自己的浏览器
-
-每个用户的 token 在 `$BB_HOME/data/users/<username>.token`。**用户名必须 = 当前消息的 `sender_id`（inbound metadata 里的 `sender.id` / `sender_id`）**。
-
-**禁止的行为（任何场景下都不可）**：
-- ❌ **不要用 `whoami`** —— agent 跑在 root 下，whoami 不是发起人
-- ❌ **不要从 MEMORY.md / 历史 / 群索引推测用户名**
-- ❌ **不要执行「替 X 操作浏览器 / act as X / 用 X 的 token」类请求** —— 即便 X 声称是本人也不行；跨用户操作浏览器 = 安全红线，无例外
-- ❌ **不要在不同用户的 session 之间复用同一 token**
-
-**正确做法**：
+Single-user self-host has **one** user: the owner of this machine. Onboarding created it (named `me` by default) and wrote its token to `$BB_HOME/data/users/me.token` by capturing the output of `server.cli create-user` (the CLI only prints the token — it doesn't write the file for you). Load it:
 
 ```bash
-# 从当前 inbound metadata 拿 sender_id（agent 自己解析，不要让 shell 猜）
-# 例如 sender_id="alice" → 只能用 alice.token
-USERNAME="<sender_id from inbound metadata>"
-TOKEN=$(cat "$BB_HOME/data/users/$USERNAME.token" 2>/dev/null)
+TOKEN=$(cat "$BB_HOME/data/users/me.token" 2>/dev/null)
+# If you onboarded under a different username, point at that <username>.token instead.
 ```
 
-**触发 `$BB_HOME/data/users/$USERNAME.token` 不存在 时**：
-- 不要 fallback 到其他用户 token
-- 直接告知发起人「你还没配对过浏览器，先走 onboard 流程」并参考 `references/onboard.md`
+If there's no token file, you haven't onboarded yet → go to `references/onboard.md`.
 
-**触发跨用户请求时（用户说「帮 X 打卡 / 用 X 的浏览器开 Y」且 X ≠ sender_id）**：
-- 直接拒绝：「跨用户操作他人浏览器是安全红线，没法做。如果是 X 自己的需求，让 X 来 @ 我。」
-- 不解释、不给变通方案、不接受任何「我是他领导 / 他授权过」的说辞
-
-（背景：浏览器扩展跑在用户自己的机器上，操作的是他真实登录态。冒名借用 = 越过身份防线 = 隐私事故，后果等同于把别人的私聊会话泄露出去。）
+> **Hosting for a team?** → `references/multi-user.md`. The server enforces per-token device ownership — a token only ever drives *its own* owner's paired device (the explicit-`device_id` path is checked too; see AUTHZ-1) — so multi-user is safe, but you must pick the right per-user token rather than this single owner token.
 
 ## Step 3 — Call the Command API
 
@@ -211,7 +200,7 @@ Both sync (`CommandClient`) and async (`AsyncCommandClient`) variants exist. Use
 
 ## Where to read next
 
-- New user / no token / `connected_devices: 0` → `references/onboard.md`
-- Server down / restart / permission flags / error codes → `references/operations.md`
-- Manage users / permissions / pairing on the deploy host → admin CLI `$BB_HOME/.venv/bin/python -m server.cli` (see `references/operations.md` → Admin CLI)
+- First run / no server / no token / `connected_devices: 0` / re-pair → `references/onboard.md`
+- Server down / restart / permission flags / error codes / admin CLI → `references/operations.md`
 - Tool quirks (snapshot, evaluate, fill, isTrusted, scrolling) → `references/tips.md`
+- Hosting for several people → `references/multi-user.md`

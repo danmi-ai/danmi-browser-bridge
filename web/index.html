@@ -831,6 +831,51 @@
   </div>
 </section>
 
+<!-- ============== 给 Agent 装 skill ============== -->
+<section id="skill">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="label">给你的 AI Agent 装 skill</div>
+      <h2>让 Agent 学会驱动你的浏览器</h2>
+      <p>扩展装在浏览器上，skill 装在你的 Agent 上（Claude Code / Codex 等）。装好后，让 Agent 启动服务并 onboard，它会给你一个 6 位配对码——填进上面第 3 步的弹窗即可。</p>
+    </div>
+    <div class="steps">
+      <!-- 推荐：直接把这句发给 Agent -->
+      <div class="step open">
+        <button class="step-head" type="button">
+          <span class="sn">A</span>
+          <h3>把这句发给你的 Agent（推荐）</h3>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="step-body"><div class="inner"><div class="pad">
+          <p>Agent 会自己下载安装 skill，然后拉起服务、生成配对码：</p>
+          <div class="cmd-pill" style="margin-top:0;">
+            <code><span id="skillPrompt">下载并安装这个 skill …</span></code>
+            <button id="copySkillPrompt" onclick="copySkillPrompt()">复制</button>
+          </div>
+        </div></div></div>
+      </div>
+
+      <!-- 手动：Claude Code 一行命令 -->
+      <div class="step">
+        <button class="step-head" type="button">
+          <span class="sn">B</span>
+          <h3>或者手动装（Claude Code）</h3>
+          <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="step-body"><div class="inner"><div class="pad">
+          <p>下载 skill 包并解压到 <code>~/.claude/skills/</code>：</p>
+          <div class="cmd-pill" style="margin-top:0;">
+            <code><span class="dollar">$</span><span id="skillManual">curl -sL …/danmi-browser-bridge.skill …</span></code>
+            <button id="copySkillManual" onclick="copySkillManual()">复制</button>
+          </div>
+          <p style="margin-bottom:0;">也可以<a id="skillDownload" href="#" download>直接下载 .skill 包</a>，其他 Agent（非 Claude）把里面的 <code>SKILL.md</code> 读进去即可。</p>
+        </div></div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ============== 核心价值 ============== -->
 <section>
   <div class="wrap">
@@ -1170,6 +1215,18 @@
     const ppUpd = document.getElementById('pp-upd-cmd'); if (ppUpd) ppUpd.textContent = BB_INSTALL_CMD;
     window.__installCmd = BB_INSTALL_CMD;
   })();
+
+  // —— 给 Agent 装 skill：从 GitHub Release 下载 .skill 包 ——
+  const BB_SKILL_URL = 'https://github.com/danmi-ai/danmi-browser-bridge/releases/latest/download/danmi-browser-bridge.skill';
+  const BB_SKILL_PROMPT = '下载并安装这个 skill：' + BB_SKILL_URL + '，然后启动 danmi-browser-bridge 进行 onboard';
+  const BB_SKILL_MANUAL = 'curl -sL ' + BB_SKILL_URL + ' -o /tmp/d.skill && unzip -o /tmp/d.skill -d ~/.claude/skills/ && rm /tmp/d.skill';
+  (function setSkillCmds() {
+    const p = document.getElementById('skillPrompt'); if (p) p.textContent = BB_SKILL_PROMPT;
+    const m = document.getElementById('skillManual'); if (m) m.textContent = BB_SKILL_MANUAL;
+    const d = document.getElementById('skillDownload'); if (d) d.href = BB_SKILL_URL;
+    window.__skillPrompt = BB_SKILL_PROMPT;
+    window.__skillManual = BB_SKILL_MANUAL;
+  })();
   // 开源版无中心服务发现：popup 仿真里的 server 地址用静态占位
   // （http://your-server:8404），不做任何自动探测——用户在扩展弹窗手填自己的 server。
 
@@ -1299,11 +1356,13 @@
     setTimeout(() => { btn.textContent = '复制'; btn.classList.remove('ok'); }, 1600);
   }
   async function copyStep1() { return _copyBtn('copyStep1', window.__installCmd || ''); }
+  async function copySkillPrompt() { return _copyBtn('copySkillPrompt', window.__skillPrompt || ''); }
+  async function copySkillManual() { return _copyBtn('copySkillManual', window.__skillManual || ''); }
 
   // —— 装机步骤：折叠 ——
   (function () {
     // 折叠：点步骤头切换 .open
-    document.querySelectorAll('#steps .step-head').forEach(head => {
+    document.querySelectorAll('.steps .step-head').forEach(head => {
       head.addEventListener('click', () => head.closest('.step').classList.toggle('open'));
     });
     // 能力命令清单：点切换 .open
