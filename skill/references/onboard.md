@@ -1,80 +1,81 @@
-# Onboarding: pair a new user's Mac to the bridge
+# Onboarding: stand up the bridge and pair the user's Chrome
 
-Read this when the SKILL.md health check shows `connected_devices: 0`, when the user has no token file at `$BB_HOME/data/users/<username>.token`, or when the user explicitly asks to "install / configure / 绑定 / 配对" the bridge on a new Mac.
+Read this when:
 
-All paths in this doc are relative to the skill root. Run commands from there (or prefix with the skill's actual install path).
+- the SKILL.md Step 0 / health check shows the **server is unreachable** (nothing installed/running here yet), or
+- health is `ok` but `connected_devices: 0` (server up, no Chrome paired), or
+- there's **no user token** at `$BB_HOME/data/users/*.token`, or
+- the user asks to "install / configure / 绑定 / 配对 / onboard" the bridge.
 
-## Why onboarding exists
+Everything here is **colocated on the user's own machine**: the bridge server, this skill, and the agent all run on the same box, and the user's Chrome pairs to `127.0.0.1`. There is no central server and no SSH. (Hosting for several people instead? See `references/multi-user.md`.)
 
-Danmi Browser Bridge is multi-user. Each Mac runs a Chrome extension that pairs to the server with a one-time **pairing code**, after which the server-side token (`bb_usr_...`) is written to `$BB_HOME/data/users/<username>.token`. Without that file you cannot drive that user's browser.
-
-The agent's job during onboarding: get the user's Mac paired, then verify the device shows up online. The user's job: run two commands on their Mac and click through Chrome's "Load unpacked" UI.
+`$BB_HOME` is the deployment root (resolved in SKILL.md). The default for a fresh self-host is `$HOME/.danmi-browser-bridge`.
 
 ## Decision tree
 
-| Situation | Path |
+| Situation | Flow |
 |---|---|
-| User has no entry in `$BB_HOME/data/users/` | [Flow A: brand-new user](#flow-a-brand-new-user) |
-| Token file exists but `connected_devices: 0` | [Flow B: re-pair an existing user](#flow-b-re-pair-an-existing-user) |
-| Token file exists, `connected_devices >= 1`, but it's the wrong user | Re-read SKILL.md Step 2 — pick the right username |
+| `/api/v1/health` refuses to connect — no server here yet | [Flow A: first run](#flow-a-first-run) |
+| Server up, token exists, but `connected_devices: 0` (device offline) | [Flow B: re-pair](#flow-b-re-pair) |
+| Token exists, `connected_devices >= 1` | Already onboarded — return to SKILL.md Step 2 |
 
-Check existing users with `ls "$BB_HOME/data/users/"`.
+## Flow A: first run
 
-## Flow A: brand-new user
+Run these on the user's machine. `$PY` is the deployment's venv python.
 
-### A.1. Get the username
+### A.0. Get the server
 
-Default to `whoami` on the agent host. If the user explicitly named themselves differently (often their corporate ID, e.g. `alice`), use that.
-
-### A.2. Issue a pairing code
-
-Two equivalent ways to mint the code — pick whichever matches where you're running.
-
-**Option A — over HTTP (no shell on the deploy host)**
+If `$BB_HOME` doesn't exist yet, clone it:
 
 ```bash
-USERNAME=<the-username>
-ADMIN_TOKEN=$(cat "$BB_HOME/data/.admin_token")
-
-curl -s -X POST "$BB_SERVER/api/v1/onboard/$USERNAME" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+[ -d "$BB_HOME" ] || git clone https://github.com/danmi-ai/danmi-browser-bridge "$BB_HOME"
 ```
 
-Response:
+(Skip if you're already running inside a checkout — then `$BB_HOME` is that checkout.)
 
-```json
-{
-  "server_url": "http://your-server:8404",
-  "pairing_code": "A7K2Q9",
-  "expires_at": "2026-06-05T14:30:00+00:00",
-  "user_id": "..."
-}
-```
-
-The pairing code is **single-use**, expires in ~30 minutes, and the server has already written `$BB_HOME/data/users/$USERNAME.token` — but the device isn't paired yet.
-
-The `server_url` in the response reflects the server's current address, but the user doesn't need to type it — the extension popup auto-discovers it from the discovery anchor. You only need to hand the user the `pairing_code`.
-
-**Option B — on-host CLI** (when you have shell access to the deploy host)
+### A.1. Bootstrap (venv + install + admin token)
 
 ```bash
+python3 -m venv "$BB_HOME/.venv"
+"$BB_HOME/.venv/bin/pip" install -e "$BB_HOME"
 PY="$BB_HOME/.venv/bin/python"
-(cd "$BB_HOME" && $PY -m server.cli create-pairing-code <username>)   # prints the 6-char code
+
+# One-time admin token (written to $BB_HOME/data/.admin_token, chmod 0600).
+(cd "$BB_HOME" && "$PY" -m server.cli create-admin-token)
 ```
 
-This prints just the code and writes `$BB_HOME/data/users/<username>.token` for you, same as Option A. For a **brand-new user who doesn't exist yet**, create them first — `create-user` prints the user token:
+### A.2. Start the server
 
 ```bash
-(cd "$BB_HOME" && $PY -m server.cli create-user <name>)   # prints the user token, then run create-pairing-code
+(cd "$BB_HOME" && "$PY" scripts/ctl.py start)
+curl -s "$BB_SERVER/api/v1/health"     # expect status:"ok", connected_devices:0
 ```
 
-### A.3. Tell the user what to do on their Mac
+If `start` fails, see `references/operations.md` (port conflict / logs).
 
-Give the user this exact message — three steps, copy-paste friendly. Match the user's language (Chinese or English). **Substitute the actual `pairing_code` from the API response into the message before sending.** The install command and server address are fixed/auto-discovered, so the only per-user value is the pairing code.
+### A.3. Mint the user's identity + a pairing code
 
-> 在你的 Mac 上完成下面三步：
+`create-user` **prints** the user token to stdout — it does **not** write a file — so capture it:
+
+```bash
+mkdir -p "$BB_HOME/data/users"
+(cd "$BB_HOME" && "$PY" -m server.cli create-user me) > "$BB_HOME/data/users/me.token"
+# Sanity-check it holds a real token:
+grep -q '^bb_usr_' "$BB_HOME/data/users/me.token" && echo "token OK"
+
+# Now mint a single-use pairing code for that user (prints the 6-char code):
+(cd "$BB_HOME" && "$PY" -m server.cli create-pairing-code me)
+```
+
+`me` is the conventional single-user name; use anything you like, just keep the `.token` filename matching. The pairing code is single-use and expires in ~30 min.
+
+### A.4. Hand the user the pairing details
+
+Give the user this message — copy-paste friendly. **Substitute the actual pairing code** before sending. Match their language.
+
+> 在你的浏览器（Mac）上完成下面三步：
 >
-> **1. 安装扩展**（这条命令固定不变，服务器换地址也不影响）
+> **1. 安装扩展**
 >
 > ```bash
 > curl -sL https://raw.githubusercontent.com/danmi-ai/danmi-browser-bridge/master/web/install.sh | bash
@@ -84,83 +85,56 @@ Give the user this exact message — three steps, copy-paste friendly. Match the
 >
 > **2. 加载扩展**
 >
-> 在 Chrome 的 `chrome://extensions` 页面：
-> - 打开右上角的 **开发者模式**
-> - 点击 **加载已解压的扩展程序**，选择 `~/Downloads/danmi-browser-bridge-extension/`
-> - （更新已装的扩展：找到「丹秘 Browser Bridge」点刷新 🔄 即可，无需重选目录）
+> 在 `chrome://extensions`：打开右上角 **开发者模式** → 点 **加载已解压的扩展程序** → 选 `~/Downloads/danmi-browser-bridge-extension/`。
+> （更新已装的：找到「丹秘 Browser Bridge」点刷新 🔄 即可。）
 >
 > **3. 配对**
 >
-> 点击工具栏里的丹秘扩展图标。服务器地址弹窗已自动填好，你只需填：
+> 点工具栏的丹秘图标，填：
+> - **服务器地址**: `http://127.0.0.1:8404`（你本机跑的 server）
 > - **配对码**: `<pairing_code>`（30 分钟内有效，单次使用）
 >
 > 点连接，弹窗显示绿色圆点就成功了，告诉我一声。
 
-> The install command pulls the extension from the GitHub Release. The server
-> URL is entered once in the extension popup (self-host has no central discovery).
-> Only the pairing code is per-user.
+> Self-host has no central discovery, so the user types the server URL once into
+> the popup. Default is `http://127.0.0.1:8404`; if you changed the port in
+> `config.toml`, use that. Only the pairing code is per-session.
 
-### A.4. Verify the pairing
-
-After the user confirms, re-run the health check:
+### A.5. Verify
 
 ```bash
-curl -s $BB_SERVER/api/v1/health
+curl -s "$BB_SERVER/api/v1/health"     # expect connected_devices >= 1
 ```
 
-Expected: `connected_devices` increments by 1. If it stays at 0:
+If it stays at 0:
 
-- Code expired → re-issue (repeat A.2).
-- User got an error in the popup → ask for a screenshot of the popup and check `references/operations.md` for the corresponding error code.
-- Extension not loaded → tell the user to confirm Chrome shows "Danmi Browser Bridge" enabled in `chrome://extensions`.
+- Code expired → re-mint (`create-pairing-code me`) and resend.
+- Popup showed an error → ask for a screenshot and check the error code in `references/operations.md`.
+- Extension not loaded → confirm Chrome shows "Danmi Browser Bridge" enabled in `chrome://extensions`.
 
-Once the device is online, return to SKILL.md Step 2 and proceed with the user's task.
+Once online, return to SKILL.md Step 2.
 
-## Flow B: re-pair an existing user
+## Flow B: re-pair
 
-The token file exists but the device is offline. Common causes: user reinstalled Chrome, removed the extension, switched Mac, or the extension's WS got blocked by VPN/firewall.
-
-### B.1. Decide which one
-
-Ask the user: "Did you remove the extension or switch Mac?"
-
-- **No, the extension should still be there** — it's a network/runtime issue, not an onboarding issue. Ask them to: (a) click the extension popup and check the status text, (b) reload the extension on `chrome://extensions`, (c) verify they can reach `<server_url>/api/v1/health` from the Mac (use the actual URL, not the env var). Then re-check `connected_devices`. If still failing, see `references/operations.md`.
-- **Yes / unsure** — proceed to B.2 to re-pair.
-
-### B.2. Issue a fresh pairing code (token preserved)
+Server is up and the token exists, but the device is offline (user reinstalled Chrome, removed the extension, switched machines, or the WS got blocked). The token is preserved — you only need a fresh pairing code:
 
 ```bash
-USERNAME=<existing-user>
-ADMIN_TOKEN=$(cat "$BB_HOME/data/.admin_token")
-
-curl -s -X POST "$BB_SERVER/api/v1/onboard/$USERNAME" \
-  -H "Authorization: Bearer $ADMIN_TOKEN"
+(cd "$BB_HOME" && "$BB_HOME/.venv/bin/python" -m server.cli create-pairing-code me)
 ```
 
-The admin endpoint is idempotent for existing users: it reuses `user_id` and the existing token, only minting a new `pairing_code`. The agent's `$BB_HOME/data/users/$USERNAME.token` stays valid.
+Send the user the pairing message from A.4. If the extension is still installed, they can skip the install/load steps and just re-pair in the popup. Then verify as in A.5.
 
-### B.3. Send the install + pairing message
+If the user says the extension *should* still be connected (didn't touch it), it's a runtime issue, not onboarding — have them reload the extension on `chrome://extensions` and check it can reach `$BB_SERVER/api/v1/health`; if it still won't connect, see `references/operations.md`.
 
-Same as Flow A.3. If the user already has the extension loaded, they can skip step 1 (curl install) and step 2 (Load unpacked) — only the popup re-pair (step 3) is needed.
+## Token rotation
 
-### B.4. Verify
-
-Same as Flow A.4.
-
-## What "the agent should do" vs "the user should do"
-
-- **Agent** runs on the Linux server, has admin token, calls `POST /onboard/<username>`, hands the user a pairing code, and verifies the device comes online.
-- **User** runs on their Mac, runs `curl ... | bash`, loads the extension into Chrome, types the pairing code into the popup.
-
-Don't try to ssh into the user's Mac, run AppleScript, or auto-open Chrome remotely — none of those work and they spook the user. Hand the user copy-paste commands and let them run them.
-
-## Token file rotation
-
-If a user's token file goes missing or you suspect it's compromised, rotate it:
+If a token is lost or you suspect it's compromised, retire the old user and mint a fresh one (this immediately invalidates the old token — confirm with the user first):
 
 ```bash
-# Force a fresh user record + new token (retires the old one)
-"$BB_HOME/.venv/bin/python" "$BB_HOME/scripts/onboard.py" <username> --force-new
+PY="$BB_HOME/.venv/bin/python"
+(cd "$BB_HOME" && "$PY" -m server.cli revoke-user me)
+(cd "$BB_HOME" && "$PY" -m server.cli create-user me) > "$BB_HOME/data/users/me.token"
+(cd "$BB_HOME" && "$PY" -m server.cli create-pairing-code me)   # re-pair with the new code
 ```
 
-This is a destructive action — the old token immediately stops working. Confirm with the user before running it.
+The user re-enters the new pairing code in the popup. (Don't use `scripts/onboard.py --force-new` — it depends on a template that isn't shipped and will error.)

@@ -1,0 +1,52 @@
+# Build the agent skill package (`.skill`) and (on a version tag) publish it
+# as a GitHub Release asset. Free on public repos (unlimited Actions minutes).
+#
+# - Every run uploads a downloadable build artifact (Actions tab).
+# - Pushing a tag like `v0.8.5` also attaches the .skill to a GitHub Release,
+#   giving the stable URL:
+#     https://github.com/<owner>/<repo>/releases/latest/download/danmi-browser-bridge.skill
+#   (NOTE: that URL is only anonymously downloadable on a PUBLIC repo.)
+#
+# The skill lives in `skill/`, but the package contract (skill-creator's
+# package_skill.py) names the zip after the top-level directory and stores
+# entries under `<dirname>/...`. The frontmatter `name:` is
+# `danmi-browser-bridge`, so we stage `skill/` as `danmi-browser-bridge/` first
+# — the dir name MUST equal the skill's `name:`.
+name: build-skill
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write  # needed to create/update Releases
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Stage skill/ as danmi-browser-bridge/
+        # dir name must equal the frontmatter `name:` so the package unzips to
+        # ~/.claude/skills/danmi-browser-bridge/SKILL.md.
+        run: cp -r skill danmi-browser-bridge
+
+      - name: Build skill package
+        run: |
+          zip -r danmi-browser-bridge.skill danmi-browser-bridge \
+            -x '*__pycache__*' '*.pyc' '*.DS_Store'
+
+      - name: Upload build artifact (every run)
+        uses: actions/upload-artifact@v4
+        with:
+          name: danmi-browser-bridge-skill
+          path: danmi-browser-bridge.skill
+          if-no-files-found: error
+
+      - name: Publish to Release (on tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: danmi-browser-bridge.skill
